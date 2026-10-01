@@ -168,7 +168,7 @@ pub struct Credential {
     pub devices: Vec<[u8; 32]>,
 }
 
-/// Trusted inputs assembled by cmnt from membership and gatekeeping.
+/// Trusted inputs assembled by cmty from membership and gatekeeping.
 /// This is deliberately not deserializable as an untrusted request body.
 ///
 /// ```compile_fail

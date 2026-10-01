@@ -3,7 +3,7 @@
 ## Binding scope
 
 Policy facade over `crbk` (rulebook), `cshm` (profile schema) and `csgn`
-(community signing keys), under `cmnt` in cvld v0.4. Policy reaches the global
+(community signing keys), under `cmty` in cvld v0.4. Policy reaches the global
 service only as signed snapshots. Global issuance, keys, suspension and databases
 remain separate. Rust on current stable; FSL-1.1-ALv2; no registry publication.
 No own cryptographic primitives. No login dates, request logs or raw gate data.
@@ -179,7 +179,7 @@ same capabilities plus current facts from the authoritative membership source.
 Raw snapshots and raw gate arrays cannot enter either API. Changing publication,
 revision, effective epoch, action, subject or check time invalidates old receipts.
 The mandatory clbs veto is included in cgts's opaque collection even if it is
-empty. cmnt only wires these parts; it does not assemble another decision.
+empty. cmty only wires these parts; it does not assemble another decision.
 
 Signing, key activation/rotation and ordinary credential/publication expiry use
 UTC-day buckets. Provision and reopen the persistent signer with `day(now)`;
@@ -241,3 +241,14 @@ commit. The core policy document and each of the five signed publications have
 independent bounded size budgets: JSON byte-array expansion cannot consume the
 space needed for durable policy or the other publications. Rejected history
 updates leave the schema and epoch unchanged; revocation and refresh still work.
+
+## Beacon
+
+`refresh_trust(now)` delegates the original cvld publication sequence to `cbcn`,
+then atomically installs the complete authenticated view in its current cache.
+The existing persisted per-kind counters and mutation cancellation fences remain
+in Policy. Failed intermediate publications may consume counters but expose no
+partial feed. `trust_feed` first checks the persisted writer fence and active
+policy epoch; changes or expiry refresh, ordinary reads preserve the same bytes.
+No member activity, private key or SQL moves into Beacon. The door owns transport
+and waiting; global publishing reuses Beacon by reference through its Publisher.

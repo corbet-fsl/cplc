@@ -1,48 +1,121 @@
 name: ci
-
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-
+  schedule:
+    - cron: '21 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: Refresh dependencies within declared ranges
+        type: boolean
+        default: false
+permissions:
+  contents: read
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_TERM_COLOR: never
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - run: rustc --version
-      - run: cargo fmt --all --check
-      - run: node --test .github/check-pins.test.mjs
-      - run: cargo metadata --locked --format-version 1 > dependency-metadata.json
-      - run: node .github/check-pins.mjs dependency-metadata.json
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked --no-fail-fast
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dependency-lock
-          path: |
-            Cargo.lock
-            dependency-metadata.json
-
-  dependency-policy:
-    runs-on: ubuntu-latest
+  resolve:
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          cache-on-failure: true
+      - name: Refresh one reproducible dependency snapshot
+        run: cargo update
+      - name: Resolve one snapshot for every job
+        run: cargo metadata --format-version 1 > dependency-metadata.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resolved-lock
+          path: |
+            Cargo.lock
+            dependency-metadata.json
+      - name: Prepare formatting correction without executing project code
+        run: |
+          cargo fmt --all
+          git diff -- '*.rs' > rustfmt.patch
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rustfmt-patch
+          path: rustfmt.patch
+      - run: test ! -s rustfmt.patch
       - run: python3 .github/check-first-party.py
+  check:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          cache-on-failure: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: resolved-lock
+          path: .
+      - run: rustc --version
+      - run: cargo fmt --all --check
+      - run: python3 .github/check-first-party.py
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
         with:
           tool: cargo-deny
       - run: cargo deny --locked check advisories
+  coverage:
+    needs: [resolve, check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: nightly
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          cache-on-failure: true
+          key: coverage
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+        with:
+          tool: cargo-llvm-cov
+      - run: rustc --version
+      - uses: actions/download-artifact@v4
+        with:
+          name: resolved-lock
+          path: .
+      - name: Measure production lines and branches
+        run: cargo llvm-cov --locked --branch --ignore-filename-regex '(^|/)(tests|scripts)/' --json --output-path coverage.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: coverage
+          path: coverage.json
+      - run: python3 .github/check-coverage.py coverage.json

@@ -1,0 +1,53 @@
+name: dependabot-automerge
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  actions: read
+concurrency:
+  group: dependabot-merge
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # No checkout, artifacts, caches, or execution of pull-request code.
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            const expected = ['resolve', 'check', 'coverage'];
+            let protection;
+            try {
+              ({ data: protection } = await github.rest.repos.getBranchProtection({ owner, repo, branch: 'main' }));
+            } catch { return; }
+            const required = protection.required_status_checks;
+            if (!protection.enforce_admins?.enabled || !required?.strict
+                || !expected.every(name => required.contexts.includes(name))) return;
+            const workflow = await github.rest.actions.getWorkflow({ owner, repo, workflow_id: 'ci.yml' });
+            if (run.workflow_id !== workflow.data.id || run.head_repository.full_name !== `${owner}/${repo}`) return;
+            for (const candidate of run.pull_requests) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: candidate.number });
+              if (pr.user.login !== 'dependabot[bot]' || pr.user.type !== 'Bot' || pr.state !== 'open' || pr.draft
+                  || pr.base.ref !== 'main' || pr.head.repo.full_name !== `${owner}/${repo}` || pr.head.sha !== run.head_sha) continue;
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, { owner, repo,
+                workflow_id: workflow.data.id, event: 'pull_request', head_sha: pr.head.sha, per_page: 100 });
+              const latest = runs.sort((a, b) => b.id - a.id)[0];
+              if (!latest || latest.id !== run.id || latest.status !== 'completed' || latest.conclusion !== 'success') continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { owner, repo, run_id: run.id, filter: 'latest', per_page: 100 });
+              if (!expected.every(name => jobs.some(job => job.name === name && job.status === 'completed' && job.conclusion === 'success'))
+                  || jobs.some(job => job.status !== 'completed' || job.conclusion !== 'success')) continue;
+              const checks = await github.paginate(github.rest.checks.listForRef, { owner, repo, ref: pr.head.sha, filter: 'latest', per_page: 100 });
+              if (!checks.length || checks.some(check => check.status !== 'completed' || check.conclusion !== 'success')) continue;
+              const { data: statuses } = await github.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha });
+              if (statuses.total_count && statuses.state !== 'success') continue;
+              // The SHA precondition fences concurrent pushes; normal merge honors branch protections.
+              await github.rest.pulls.merge({ owner, repo, pull_number: pr.number, sha: pr.head.sha, merge_method: 'squash' });
+            }

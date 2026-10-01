@@ -11,18 +11,19 @@ publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
 
 [dependencies]
-cpsd = { git = "https://github.com/corbet-foss/cpsd", rev = "0d314b97bce9aeaffb5424159e8255ce34acee1e" }
-cgts = { git = "https://github.com/corbet-libs/cgts", rev = "b1200a82039260e0597a966dcd435aeee193484e" }
-crbk = { git = "https://github.com/corbet-foss/crbk", rev = "954c17762df251c1354bd9303354d82b0a81e487" }
-crlt = { git = "https://github.com/corbet-foss/crlt", rev = "80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2" }
-csgn = { git = "https://github.com/corbet-foss/csgn", rev = "3ea958b522a15fecf65630aae1f9944135105497", features = ["libsql"] }
-cshm = { git = "https://github.com/corbet-foss/cshm", rev = "01e259cad7e64cb2150344153ae350a23d05f478" }
+cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main" }
+cpsd = { git = "https://github.com/corbet-foss/cpsd", branch = "main" }
+cgts = { git = "https://github.com/corbet-libs/cgts", branch = "main" }
+crbk = { git = "https://github.com/corbet-foss/crbk", branch = "main" }
+crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
+csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", features = ["libsql"] }
+cshm = { git = "https://github.com/corbet-foss/cshm", branch = "main" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
-clbs = { git = "https://github.com/corbet-foss/clbs", rev = "873f2dd7388c6d5e025a27b4c55447c4b4892a2d" }
+clbs = { git = "https://github.com/corbet-foss/clbs", branch = "main" }
 rand = "0.8"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
