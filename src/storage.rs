@@ -222,3 +222,7 @@ impl Storage for MemoryStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/storage.rs"]
+mod unit_tests;

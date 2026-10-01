@@ -11,6 +11,7 @@ permissions:
 concurrency:
   group: dependabot-merge
   cancel-in-progress: false
+  queue: max
 jobs:
   merge:
     if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
@@ -18,19 +19,18 @@ jobs:
     timeout-minutes: 5
     steps:
       # No checkout, artifacts, caches, or execution of pull-request code.
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
             const expected = ['resolve', 'check', 'coverage'];
-            let protection;
-            try {
-              ({ data: protection } = await github.rest.repos.getBranchProtection({ owner, repo, branch: 'main' }));
-            } catch { return; }
-            const required = protection.required_status_checks;
-            if (!protection.enforce_admins?.enabled || !required?.strict
-                || !expected.every(name => required.contexts.includes(name))) return;
+            // Public branch metadata needs contents:read, not administration.
+            // GitHub enforces the configured strict-base protection at merge.
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const required = branch.protection?.required_status_checks;
+            if (!branch.protected || required?.enforcement_level !== 'everyone'
+                || !expected.every(name => required.contexts?.includes(name))) return;
             const workflow = await github.rest.actions.getWorkflow({ owner, repo, workflow_id: 'ci.yml' });
             if (run.workflow_id !== workflow.data.id || run.head_repository.full_name !== `${owner}/${repo}`) return;
             for (const candidate of run.pull_requests) {
@@ -49,5 +49,7 @@ jobs:
               const { data: statuses } = await github.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha });
               if (statuses.total_count && statuses.state !== 'success') continue;
               // The SHA precondition fences concurrent pushes; normal merge honors branch protections.
-              await github.rest.pulls.merge({ owner, repo, pull_number: pr.number, sha: pr.head.sha, merge_method: 'squash' });
+              const { data: merged } = await github.rest.pulls.merge({ owner, repo, pull_number: pr.number,
+                sha: pr.head.sha, merge_method: 'squash' });
+              if (!merged.merged) throw new Error('Protected exact-head merge was refused');
             }

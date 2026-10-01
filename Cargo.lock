@@ -636,9 +636,9 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://github.com/corbet-foss/cbcn?branch=main#b0c166ba9b92abaeee94d40d4fd5aa80acfd847f"
+source = "git+https://github.com/corbet-foss/cbcn?branch=main#6fb7f412905bf3164b192f693626d6febfa45b4e"
 dependencies = [
- "csgn 0.0.0 (git+https://github.com/corbet-foss/csgn?branch=main)",
+ "csgn",
  "serde",
  "serde_json",
 ]
@@ -646,10 +646,10 @@ dependencies = [
 [[package]]
 name = "cblc"
 version = "0.0.0"
-source = "git+https://github.com/corbet-libs/cblc?rev=6d66b8d353d2054a54c164c8e186137a42ade4ab#6d66b8d353d2054a54c164c8e186137a42ade4ab"
+source = "git+https://github.com/corbet-libs/cblc?branch=main#f54dcc9d176ebf37092be7862ea05dffd821489a"
 dependencies = [
  "cpns",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "crlt",
  "cssr",
  "cthl",
  "cvfy",
@@ -698,12 +698,13 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 [[package]]
 name = "cgrd"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cgrd?rev=ff83c2b3fe786feb9b8c5f459b828ea1db4e6449#ff83c2b3fe786feb9b8c5f459b828ea1db4e6449"
+source = "git+https://github.com/corbet-foss/cgrd?branch=main#540db6bb67af34d4eae99fc3d05c3d3af1943ed8"
 dependencies = [
  "bigdecimal",
  "cpns",
- "csgn 0.0.0 (git+https://github.com/corbet-foss/csgn?rev=3ea958b522a15fecf65630aae1f9944135105497)",
- "cshm 0.0.0 (git+https://github.com/corbet-foss/cshm?rev=01e259cad7e64cb2150344153ae350a23d05f478)",
+ "crbk",
+ "csgn",
+ "cshm",
  "ed25519-dalek 3.0.0",
  "precis-profiles",
  "rustrict",
@@ -716,15 +717,15 @@ dependencies = [
 [[package]]
 name = "cgts"
 version = "0.0.0"
-source = "git+https://github.com/corbet-libs/cgts?branch=main#b1200a82039260e0597a966dcd435aeee193484e"
+source = "git+https://github.com/corbet-libs/cgts?branch=main#f5eb6b44cd0171af57bcd066f5f60e49eeeb0799"
 dependencies = [
  "cblc",
  "cgrd",
- "clbs 0.0.0 (git+https://github.com/corbet-foss/clbs?rev=873f2dd7388c6d5e025a27b4c55447c4b4892a2d)",
+ "clbs",
  "cpns",
- "cpsd 0.0.0 (git+https://github.com/corbet-foss/cpsd?rev=0d314b97bce9aeaffb5424159e8255ce34acee1e)",
- "crbk 0.0.0 (git+https://github.com/corbet-foss/crbk?rev=954c17762df251c1354bd9303354d82b0a81e487)",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "cpsd",
+ "crbk",
+ "crlt",
  "cvch",
  "ed25519-dalek 2.2.0",
  "rand 0.8.8",
@@ -823,18 +824,7 @@ name = "clbs"
 version = "0.0.0"
 source = "git+https://github.com/corbet-foss/clbs?branch=main#40ff96709532a6355d3026a0f81e4f226f3b9c59"
 dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?branch=main)",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "clbs"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/clbs?rev=873f2dd7388c6d5e025a27b4c55447c4b4892a2d#873f2dd7388c6d5e025a27b4c55447c4b4892a2d"
-dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "crlt",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -946,12 +936,12 @@ version = "0.0.0"
 dependencies = [
  "cbcn",
  "cgts",
- "clbs 0.0.0 (git+https://github.com/corbet-foss/clbs?branch=main)",
- "cpsd 0.0.0 (git+https://github.com/corbet-foss/cpsd?branch=main)",
- "crbk 0.0.0 (git+https://github.com/corbet-foss/crbk?branch=main)",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?branch=main)",
- "csgn 0.0.0 (git+https://github.com/corbet-foss/csgn?branch=main)",
- "cshm 0.0.0 (git+https://github.com/corbet-foss/cshm?branch=main)",
+ "clbs",
+ "cpsd",
+ "crbk",
+ "crlt",
+ "csgn",
+ "cshm",
  "rand 0.8.8",
  "serde",
  "serde_json",
@@ -963,9 +953,9 @@ dependencies = [
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpns?rev=d68a3f3a2df322c513d0e754e452ee02aab7a5b9#d68a3f3a2df322c513d0e754e452ee02aab7a5b9"
+source = "git+https://github.com/corbet-foss/cpns?branch=main#85674ab2e70f11051ba30ab44a8c7d3301ac6ec1"
 dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "crlt",
  "getrandom 0.4.3",
  "sha2 0.11.0",
  "subtle",
@@ -975,7 +965,7 @@ dependencies = [
 [[package]]
 name = "cpsd"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpsd?branch=main#af308bbc9d82323f905fae20d9eb4ac7da576f9e"
+source = "git+https://github.com/corbet-foss/cpsd?branch=main#35b092608d275182eff03cb8e3a3b54a875a6cb8"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -985,35 +975,13 @@ dependencies = [
  "bbs_plus",
  "blake2",
  "bulletproofs_plus_plus",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
- "csgn 0.0.0 (git+https://github.com/corbet-foss/csgn?rev=3ea958b522a15fecf65630aae1f9944135105497)",
+ "crlt",
+ "csgn",
  "dock_crypto_utils",
  "getrandom 0.2.17",
  "js-sys",
  "proof_system",
- "wasm-bindgen",
- "zeroize",
-]
-
-[[package]]
-name = "cpsd"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpsd?rev=0d314b97bce9aeaffb5424159e8255ce34acee1e#0d314b97bce9aeaffb5424159e8255ce34acee1e"
-dependencies = [
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "bbs_plus",
- "blake2",
- "bulletproofs_plus_plus",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
- "csgn 0.0.0 (git+https://github.com/corbet-foss/csgn?rev=3ea958b522a15fecf65630aae1f9944135105497)",
- "dock_crypto_utils",
- "getrandom 0.2.17",
- "js-sys",
- "proof_system",
+ "rand_chacha 0.3.1",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -1130,18 +1098,7 @@ name = "crbk"
 version = "0.0.0"
 source = "git+https://github.com/corbet-foss/crbk?branch=main#ee4f73334818e2053c7df3d123a8e3b8cc23b2cf"
 dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?branch=main)",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "crbk"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crbk?rev=954c17762df251c1354bd9303354d82b0a81e487#954c17762df251c1354bd9303354d82b0a81e487"
-dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "crlt",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1159,23 +1116,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2"
-dependencies = [
- "deadpool",
- "libsql",
- "libsql-hrana",
- "reqwest",
- "serde_json",
- "sqlparser",
- "thiserror 2.0.21",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "crlt"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2#80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#52838ac15102129d4d3161f4dfdaf4603e84ad8f"
 dependencies = [
  "deadpool",
  "libsql",
@@ -1266,21 +1207,9 @@ source = "git+https://github.com/corbet-foss/csgn?branch=main#eac891b771152b17aa
 dependencies = [
  "ciborium-ll",
  "coset",
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?branch=main)",
+ "crlt",
  "ed25519-dalek 3.0.0",
  "rand_core 0.10.1",
- "sha2 0.11.0",
- "zeroize",
-]
-
-[[package]]
-name = "csgn"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/csgn?rev=3ea958b522a15fecf65630aae1f9944135105497#3ea958b522a15fecf65630aae1f9944135105497"
-dependencies = [
- "ciborium-ll",
- "coset",
- "ed25519-dalek 3.0.0",
  "sha2 0.11.0",
  "zeroize",
 ]
@@ -1298,23 +1227,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "cshm"
-version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cshm?rev=01e259cad7e64cb2150344153ae350a23d05f478#01e259cad7e64cb2150344153ae350a23d05f478"
-dependencies = [
- "bigdecimal",
- "jsonschema",
- "rust_decimal",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?rev=6dbff220fc47dfb6e44403ecde9eb3af13cd75f5#6dbff220fc47dfb6e44403ecde9eb3af13cd75f5"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#bf8de7e83c2fe923ac5ca7a84167824c6dc5f89b"
 dependencies = [
- "crlt 0.0.0 (git+https://github.com/corbet-foss/crlt?rev=80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2)",
+ "crlt",
  "p256",
  "tokio",
  "url",
@@ -1323,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "cthl"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cthl?rev=a41533a255cefc0757078205bff87c03e6c7bbbe#a41533a255cefc0757078205bff87c03e6c7bbbe"
+source = "git+https://github.com/corbet-foss/cthl?branch=main#e719761a51795a115a969f50353df27f8c152bfd"
 dependencies = [
  "governor",
 ]
@@ -1374,7 +1291,7 @@ dependencies = [
 [[package]]
 name = "cvch"
 version = "0.2.1"
-source = "git+https://github.com/corbet-foss/cvch?rev=37ee0cba6c8be767c8e8ecd286ec225a21b564e1#37ee0cba6c8be767c8e8ecd286ec225a21b564e1"
+source = "git+https://github.com/corbet-foss/cvch?branch=main#37ee0cba6c8be767c8e8ecd286ec225a21b564e1"
 dependencies = [
  "ed25519-dalek 2.2.0",
  "serde",
@@ -1386,7 +1303,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?rev=5b31dde13fd9bafc115dbc8ff7f51cccc3debf29#5b31dde13fd9bafc115dbc8ff7f51cccc3debf29"
+source = "git+https://github.com/corbet-foss/cvfy?branch=main#3445fce1552b534b98871c027b2d3e19cd064386"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -1397,7 +1314,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/czkp?rev=e1782da1f7193a26ca0aea23137784896b780c03#e1782da1f7193a26ca0aea23137784896b780c03"
+source = "git+https://github.com/corbet-foss/czkp?branch=main#976435f44c6e387f76387c945bd39c0122f6c650"
 dependencies = [
  "data-encoding",
  "ed25519-dalek 2.2.0",
@@ -2576,9 +2493,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "905edfa6eee835291d6efe33f733f7fcb40c2a24be93b78b74df95e56aef8611"
+checksum = "5761b0ca0a31464030d7c2a98087fde3124ebb5e09b5a112cdb815f03b8ee150"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2606,9 +2523,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-macros"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8123fa451e16474892232c373cedee1b75f48b490c489a499914442108e50933"
+checksum = "75e6d7c2c9afe6aa7de831af841801c954b83b1742f0e228b505326456a70b8f"
 dependencies = [
  "jsonschema-macros-core",
  "proc-macro2",
@@ -2616,9 +2533,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-macros-core"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a002239f1799082b6ae421fc171e6d30b0e34b257b8729be8810546cee5114e"
+checksum = "65bcdd5a5c9e2c6ddefdddef36f1a27f5183649bd135f633e1bc6bfa97982407"
 dependencies = [
  "fancy-regex",
  "indexmap",
@@ -2635,18 +2552,18 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "023cf6b6c38655c1e9cedf72b9c534fd361bd35d20ac06e074f2c93b7dd0836c"
+checksum = "f1ffba4378a3d6ee7f1ab65a8ed95c711ccfe4a3870932bdce89d8260abed38a"
 dependencies = [
  "regex-syntax",
 ]
 
 [[package]]
 name = "jsonschema-value"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43519639b8e32075ef90a9b6b19136e516a3236b7943c3fe6b1622dafdced8ea"
+checksum = "386121f898b560ff6aaa7974952720e9d9276a201eca31296387c2ed8707855e"
 dependencies = [
  "ahash",
  "bytecount",
@@ -3699,9 +3616,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.58.3"
+version = "0.58.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ead446bbb5527785ff232eb96625ac03daa627945470374c553db8f13090e30f"
+checksum = "5cfa1c91745dbca76a406b926918d7c63e15a4525ebab939fec3e015a1fb82b1"
 dependencies = [
  "ahash",
  "fluent-uri",

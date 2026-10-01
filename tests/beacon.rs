@@ -75,3 +75,22 @@ async fn beacon_uses_durable_real_sql_publications_and_reopen_fences() {
     assert!(current.revision > first.revision);
     assert_eq!(reopened.trust_feed(NOW + 1).await.unwrap(), current);
 }
+
+#[tokio::test]
+async fn beacon_refreshes_rotated_keys_and_expired_envelopes() {
+    let mut policy = memory().await;
+    let initial = policy.trust_feed(NOW).await.unwrap();
+    policy.rotate(key(99), NOW + 1).await.unwrap();
+    let rotated = policy.trust_feed(NOW + 1).await.unwrap();
+    assert_ne!(rotated.key_ring, initial.key_ring);
+    assert!(rotated.revision > initial.revision);
+    let refreshed = policy.trust_feed(NOW + DAY).await.unwrap();
+    assert!(refreshed.revision > rotated.revision);
+    assert!(
+        policy
+            .key_ring()
+            .unwrap()
+            .verify(&refreshed.settings, csgn::Kind::SettingsSnapshot, NOW + DAY,)
+            .is_ok()
+    );
+}

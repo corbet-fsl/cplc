@@ -14,8 +14,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.repository }}
+  cancel-in-progress: false
+  queue: max
 env:
   CARGO_BUILD_JOBS: 2
   CARGO_TERM_COLOR: never
@@ -73,7 +74,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           cache-on-failure: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: resolved-lock
           path: .
@@ -107,15 +108,22 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - run: rustc --version
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: resolved-lock
           path: .
       - name: Measure production lines and branches
         run: cargo llvm-cov --locked --branch --ignore-filename-regex '(^|/)(tests|scripts)/' --json --output-path coverage.json
+      - name: Retain source and instantiation diagnostics from the same execution
+        run: |
+          cargo llvm-cov report --branch --ignore-filename-regex '(^|/)(tests|scripts)/' --lcov --output-path coverage.lcov
+          cargo llvm-cov report --branch --ignore-filename-regex '(^|/)(tests|scripts)/' --text --show-instantiations --output-path coverage.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: coverage
-          path: coverage.json
+          path: |
+            coverage.json
+            coverage.lcov
+            coverage.txt
       - run: python3 .github/check-coverage.py coverage.json

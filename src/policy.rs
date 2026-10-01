@@ -636,6 +636,14 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         {
             return Err(Error::Invalid("membership state or lease"));
         }
+        if facts.authorized_devices.len() > MAX_ENTRIES
+            || request
+                .devices
+                .iter()
+                .any(|key| !facts.authorized_devices.contains(key))
+        {
+            return Err(Error::Invalid("unauthorized device"));
+        }
         let durations = crbk::MembershipSettings::from_snapshot(request.snapshot.settings())?;
         let days = if facts.probation_until.is_some_and(|end| end > now) {
             durations.new_credential_days

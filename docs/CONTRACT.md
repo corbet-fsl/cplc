@@ -197,11 +197,14 @@ day start even in these cases. Member probation and leases have no such exceptio
 
 Device public keys must be generated independently per community by the wallet
 and authenticated/authorized by the service’s community device protocol before
-issuance. cmbr owns passkey authentication, not the separate public device-key
-registry. A reusable global wallet
-key would link communities and is outside this contract. cplc signs only the
-supplied authorized set, rejects duplicates/revoked devices and cannot determine
-whether a public key was reused in another isolated community database.
+issuance. cmbr owns current passkey-to-community-device bindings.
+`MembershipFacts.authorized_devices` carries those current public keys under the
+returned member lease, held through durable signing. Requested keys must be a
+subset of that independently read set; empty or removed authority refuses
+issuance. Request bytes never register or authorize a key. A reusable global
+wallet key would link communities and is outside this contract. cplc also rejects
+duplicates/revoked devices and cannot determine whether a public key was reused
+in another isolated community database.
 
 The global policy format consumed by cglb is signed by the separate authenticated
 global policy authority described in cglb's contract. A community signer never

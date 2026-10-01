@@ -278,6 +278,7 @@ pub struct FixtureMembership {
     pub state: crbk::MembershipState,
     pub probation_until: Option<u64>,
     pub lease_end: u64,
+    pub authorized_devices: Vec<[u8; 32]>,
 }
 impl MembershipSource for FixtureMembership {
     type Lease = ();
@@ -292,6 +293,7 @@ impl MembershipSource for FixtureMembership {
                 state: self.state,
                 probation_until: self.probation_until,
                 lease_end: self.lease_end,
+                authorized_devices: self.authorized_devices.clone(),
             },
             (),
         ))
@@ -354,6 +356,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> TestPolicyApi for Policy<R, S
                 MemberClass::Established => None,
             },
             lease_end: 90 * DAY,
+            authorized_devices: DEVICES.to_vec(),
         };
         self.issue(
             &source,

@@ -4,6 +4,14 @@ use common::*;
 use cplc::*;
 
 async fn issue(policy: &mut MemoryPolicy, source: &FixtureMembership, now: u64) -> Result<Vec<u8>> {
+    issue_devices(policy, source, DEVICES, now).await
+}
+async fn issue_devices(
+    policy: &mut MemoryPolicy,
+    source: &FixtureMembership,
+    devices: &[[u8; 32]],
+    now: u64,
+) -> Result<Vec<u8>> {
     let snapshot = policy.verified_settings(now).await?;
     let gates = checked(&snapshot, MEMBER, "admit", &[], now).await?;
     policy
@@ -16,7 +24,7 @@ async fn issue(policy: &mut MemoryPolicy, source: &FixtureMembership, now: u64) 
                 snapshot: &snapshot,
                 gates: &gates,
                 pins: &[],
-                devices: DEVICES,
+                devices,
             },
             now,
         )
@@ -28,6 +36,7 @@ fn source() -> FixtureMembership {
         state: crbk::MembershipState::Admitted,
         probation_until: Some(14 * DAY),
         lease_end: 90 * DAY,
+        authorized_devices: DEVICES.to_vec(),
     }
 }
 
@@ -139,12 +148,14 @@ async fn community_device_keys_are_preserved_without_a_global_wallet_key() {
     let mut policy = memory_with(book(crbk::ActionPolicy::default())).await;
     let a = [11; 32];
     let b = [12; 32];
-    assert_ne!(a, b); // Independently generated per-community public keys.
+    assert_ne!(a, b); // Distinct fixture keys; real enrollment is tested in cmbr.
+    let mut member = source();
+    member.authorized_devices = vec![a];
     let snapshot = policy.verified_settings(NOW).await.unwrap();
     let gates = checked(&snapshot, MEMBER, "admit", &[], NOW).await.unwrap();
     let cose = policy
         .issue(
-            &source(),
+            &member,
             CredentialRequest {
                 subject: subject(),
                 handle: "testmember",
@@ -199,6 +210,7 @@ impl Drop for Lease {
 struct LeasedSource {
     held: std::sync::Arc<std::sync::atomic::AtomicBool>,
     lease_end: u64,
+    authorized_devices: Vec<[u8; 32]>,
 }
 impl MembershipSource for LeasedSource {
     type Lease = Lease;
@@ -211,6 +223,7 @@ impl MembershipSource for LeasedSource {
                 state: crbk::MembershipState::Admitted,
                 probation_until: None,
                 lease_end: self.lease_end,
+                authorized_devices: self.authorized_devices.clone(),
             },
             Lease(self.held.clone()),
         ))
@@ -256,10 +269,15 @@ async fn member_lease_survives_signing_and_is_released_on_success_or_refusal() {
     let snapshot = policy.verified_settings(NOW).await.unwrap();
     let gates = checked(&snapshot, MEMBER, "admit", &[], NOW).await.unwrap();
     checking.store(true, Ordering::SeqCst);
-    for (lease_end, allowed) in [(90 * DAY, true), (0, false)] {
+    for (lease_end, authorized_devices, allowed) in [
+        (90 * DAY, DEVICES.to_vec(), true),
+        (0, DEVICES.to_vec(), false),
+        (90 * DAY, vec![], false),
+    ] {
         let source = LeasedSource {
             held: held.clone(),
             lease_end,
+            authorized_devices,
         };
         let result = policy
             .issue(
@@ -279,4 +297,38 @@ async fn member_lease_survives_signing_and_is_released_on_success_or_refusal() {
         assert_eq!(result.is_ok(), allowed);
         assert!(!held.load(Ordering::SeqCst));
     }
+}
+
+#[tokio::test]
+async fn requested_keys_never_authorize_themselves_and_revocation_is_current() {
+    let mut policy = memory_with(book(crbk::ActionPolicy::default())).await;
+    let mut member = source();
+    let authorized = DEVICES[0];
+    let unknown = [77; 32];
+    member.authorized_devices = vec![authorized, [78; 32]];
+    let signed = issue_devices(&mut policy, &member, &[authorized], NOW)
+        .await
+        .unwrap();
+    assert_eq!(
+        decode_credential(policy.key_ring().unwrap(), &signed, NOW)
+            .0
+            .devices,
+        [authorized]
+    );
+    for requested in [&[unknown][..], &[authorized, unknown][..]] {
+        assert!(matches!(
+            issue_devices(&mut policy, &member, requested, NOW).await,
+            Err(Error::Invalid("unauthorized device"))
+        ));
+    }
+    member.authorized_devices.clear();
+    assert!(matches!(
+        issue_devices(&mut policy, &member, &[authorized], NOW).await,
+        Err(Error::Invalid("unauthorized device"))
+    ));
+    member.authorized_devices = vec![authorized; MAX_ENTRIES + 1];
+    assert!(matches!(
+        issue_devices(&mut policy, &member, &[authorized], NOW).await,
+        Err(Error::Invalid("unauthorized device"))
+    ));
 }

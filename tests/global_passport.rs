@@ -106,6 +106,7 @@ async fn verified_global_metadata_is_decided_but_not_disclosed() {
         state: crbk::MembershipState::Admitted,
         probation_until: Some(14 * DAY),
         lease_end: 90 * DAY,
+        authorized_devices: DEVICES.to_vec(),
     };
     let cose = policy
         .issue(

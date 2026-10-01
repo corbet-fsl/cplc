@@ -107,6 +107,10 @@ pub struct MembershipFacts {
     pub probation_until: Option<u64>,
     /// Exclusive UTC-day lease end derived from the register's coarse month.
     pub lease_end: u64,
+    /// Current community device keys bound to live passkeys by the membership
+    /// owner. Never copy these from the credential request. The returned lease
+    /// prevents revocation or rebinding until signing has completed.
+    pub authorized_devices: Vec<[u8; 32]>,
 }
 
 /// Read authoritative membership state at issuance. cmbr implements this boundary;
@@ -115,7 +119,7 @@ pub trait MembershipSource {
     /// Per-member serialization capability, held until signing has completed.
     /// cmbr uses its member queue guard; read-only lobby calls never acquire it.
     type Lease: Send + Sync;
-    /// Read current lifecycle, probation and lease for this authenticated member.
+    /// Read current lifecycle, lease and authorized devices for this member.
     fn membership(
         &self,
         member: &str,
