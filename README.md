@@ -50,7 +50,8 @@ each selected leaf's README and implemented contract:
 | [crlt](https://github.com/corbet-foss/crlt/tree/6b94dacd7fa04aa8847c62c6471a1fc5c0f6c9dc) | Ready on main; selected for scoped transactions, migrations and indexed query enforcement over official [libsql 0.9.30](https://github.com/tursodatabase/libsql) (MIT). No direct-client fallback needed. |
 | [Serde](https://github.com/serde-rs/serde), [serde_json](https://github.com/serde-rs/json), [thiserror](https://github.com/dtolnay/thiserror) (MIT/Apache-2.0) | Selected for typed wire/persistence data and redacted errors. No own parser. |
 
-Leaf and facade dependencies are pinned by full Git revision. The cgts facade
+Leaf and facade dependencies follow main, with one full revision per crate in
+the shared CI lock snapshot. The cgts facade
 is FSL-1.1-ALv2; the selected corbet-foss leaves use their documented open-source
 licenses. CI checks the complete resolved graph for duplicate revisions.
 

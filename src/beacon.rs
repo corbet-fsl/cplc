@@ -3,7 +3,9 @@ use crate::{Policy, SnapshotKind, Storage};
 
 impl<R: crbk::Storage, S: Storage, K: csgn::Store> cbcn::Publisher for Policy<R, S, K> {
     fn key_ring(&self) -> cbcn::Result<csgn::KeyRing> {
-        Policy::key_ring(self).cloned().map_err(|_| cbcn::Error::Publication)
+        Policy::key_ring(self)
+            .cloned()
+            .map_err(|_| cbcn::Error::Publication)
     }
 
     async fn publish(&mut self, kind: cbcn::Kind, now: u64) -> cbcn::Result<Vec<u8>> {
@@ -14,10 +16,14 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> cbcn::Publisher for Policy<R,
             cbcn::Kind::Revocations => SnapshotKind::RevocationList,
             cbcn::Kind::SchemaVersions => SnapshotKind::SchemaVersions,
         };
-        Policy::publish(self, kind, now).await.map_err(|_| cbcn::Error::Publication)
+        Policy::publish(self, kind, now)
+            .await
+            .map_err(|_| cbcn::Error::Publication)
     }
 
     async fn manifest(&mut self, now: u64) -> cbcn::Result<Vec<u8>> {
-        self.trust_manifest(now).await.map_err(|_| cbcn::Error::Publication)
+        self.trust_manifest(now)
+            .await
+            .map_err(|_| cbcn::Error::Publication)
     }
 }
