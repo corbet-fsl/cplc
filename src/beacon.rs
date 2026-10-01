@@ -8,6 +8,12 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> cbcn::Publisher for Policy<R,
             .map_err(|_| cbcn::Error::Publication)
     }
 
+    fn key_transitions(&self) -> cbcn::Result<Vec<cbcn::KeyTransition>> {
+        Policy::key_transitions(self)
+            .map(<[cbcn::KeyTransition]>::to_vec)
+            .map_err(|_| cbcn::Error::Publication)
+    }
+
     async fn publish(&mut self, kind: cbcn::Kind, now: u64) -> cbcn::Result<Vec<u8>> {
         let kind = match kind {
             cbcn::Kind::Settings => SnapshotKind::Settings,

@@ -7,7 +7,7 @@ Policy facade over `crbk` (rulebook), `cshm` (profile schema) and `csgn`
 service only as signed snapshots. Global issuance, keys, suspension and databases
 remain separate. Rust on current stable; FSL-1.1-ALv2; no registry publication.
 No own cryptographic primitives. No login dates, request logs or raw gate data.
-Use maintained leaves pinned by revision. Storage goes through `crlt`, with one
+Use maintained leaves on main with one exact locked revision each. Storage goes through `crlt`, with one
 database per community, a community key in every table and indexed queries.
 Tests exercise real leaf operations and real local libSQL on GitHub Actions.
 
@@ -126,14 +126,16 @@ values. Do not enable dependency SQL/HTTP debug tracing for member traffic.
 ## Integration limits
 
 crbk, csgn and cplc use one revision of crlt and clones of one database handle.
-CI rejects duplicate or floating Corbet dependencies, including transitive ones.
+CI rejects duplicate Corbet crate identities and revision/tag selectors, including
+transitive ones. First-party declarations follow main; every tested graph retains
+one exact locked revision per crate.
 
-cgrd currently consumes a narrower settings vocabulary (conjunctive gate lists
-and embedded revocations), while crbk publishes the full flat action policies.
-A consumer adapter must preserve all/any/k-of-n semantics and revocations; feeding
-a flat settings snapshot directly to cgrd is not supported. No lossy translation
-or silent empty-gate fallback is provided. Cross-facade wire integration remains
-an explicit downstream task. Emergency signing-key revocation and rollback-proof
+cchr retains the original complete settings and separate revocation signatures.
+Its borrowed admission adapter passes those bytes to cgrd, which verifies them
+and delegates all/any/k-of-n semantics to crbk. Actual door-authorized bundles
+exercise this path natively and on wasm in Charter and Assurance CI. No lossy
+translation or silent empty-gate fallback is provided. Production forum wiring
+remains downstream. Emergency signing-key revocation and rollback-proof
 recovery remain csgn/service boundaries. The development test gate is test-only;
 there are no provider calls or production test-gate features.
 
@@ -255,3 +257,22 @@ partial feed. `trust_feed` first checks the persisted writer fence and active
 policy epoch; changes or expiry refresh, ordinary reads preserve the same bytes.
 No member activity, private key or SQL moves into Beacon. The door owns transport
 and waiting; global publishing reuses Beacon by reference through its Publisher.
+
+## Durable publishing-key continuity
+
+Rotation and pruning use csgn's atomic original-proof methods and separate public
+ring-change sequence. Policy copies the pending original proof into its own CAS
+before acknowledging it. Reopen reconciles a pending proof, including a Policy
+commit whose reply was lost or a lost signer acknowledgement. Publication and
+issuance refuse while the signer ring and retained proof floor disagree.
+Ordinary credential signing does not affect the public sequence, and rotation
+preserves the existing policy epoch and valid old credentials. Proof lifetime
+uses the signer's maximum validity; predecessor keys remain available for that
+signed lifetime, including when no member credential requires them.
+
+Beacon carries the retained bytes unchanged. History is monotonic and bounded by
+256 changes and 1 MiB of original proofs. Exhaustion refuses; no transition is
+silently dropped. A proof that exceeds the remaining byte budget remains durable
+and pending in csgn, and the writer refuses publication until operator recovery.
+That exceptional history-budget condition needs deployment reprovisioning; the
+facade does not invent a root reset. No private key enters Policy storage.

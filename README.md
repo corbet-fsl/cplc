@@ -67,10 +67,10 @@ production code. `MemoryStore` is a real volatile implementation for tests.
 
 Every store uses a clone of the same crlt database handle and pool.
 
-cgrd's current settings format expresses conjunctive requirements and embeds
-   revocations; crbk publishes full flat action policies. A consuming facade
-   must provide an agreed, lossless adapter. These settings snapshots cannot be
-   fed directly to cgrd. Issuance uses crbk's full all/any/k-of-n evaluator.
+Charter retains the complete signed settings and separate revocation envelopes.
+Its admission adapter passes those original bytes to Guard, which verifies them
+and delegates all/any/k-of-n decisions to crbk. Issuance uses the same crbk
+evaluator. See the implemented contract for the downstream integration boundary.
 
 Authenticating snapshot/key-ring distribution, current freshness floors,
 notice delivery, schema grandfathering and emergency key revocation belong to

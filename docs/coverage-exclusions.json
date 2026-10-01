@@ -1,7 +1,7 @@
 [
   {
     "path": "src/policy.rs",
-    "line": 180,
+    "line": 234,
     "context": [
       "        cgts::gates::define_settings(&mut change.rulebook)",
       "            .map_err(|_| Error::Invalid(\"gate settings\"))?;",
@@ -11,7 +11,7 @@
   },
   {
     "path": "src/policy.rs",
-    "line": 469,
+    "line": 519,
     "context": [
       "                next.schema.clone().ok_or(Error::Missing)?,",
       "            )?,",
@@ -21,7 +21,7 @@
   },
   {
     "path": "src/storage.rs",
-    "line": 123,
+    "line": 127,
     "context": [
       "        if serde_json::to_vec(&document)",
       "            .map_err(|_| Error::Corrupt)?",

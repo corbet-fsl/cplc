@@ -35,6 +35,9 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     ) -> Result<Self> {
         config.validate()?;
         check_issuer(&signer, store.community())?;
+        if signer.ring_revision()? != 0 {
+            return Err(Error::Invalid("unretained key history"));
+        }
         let state = StoredPolicy {
             community: store.community().into(),
             revision: 1,
@@ -45,6 +48,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             communities: BTreeSet::new(),
             revocations: Revocations::default(),
             publications: BTreeMap::new(),
+            key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
         Ok(Self {
@@ -68,13 +72,15 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let expected = state.revision;
         state.revision = next_counter(expected)?;
         store.compare_exchange(Some(expected), &state).await?;
-        Ok(Self {
+        let mut policy = Self {
             rules,
             store,
             signer,
             state: Some(state),
             beacon: cbcn::Beacon::default(),
-        })
+        };
+        policy.retain_pending_transition().await?;
+        Ok(policy)
     }
 
     fn state(&self) -> Result<&StoredPolicy> {
@@ -83,7 +89,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
 
     async fn current(&self) -> Result<&StoredPolicy> {
         let state = self.state()?;
-        self.signer.key_ring()?;
+        self.key_ring()?;
         let stored = self.store.load().await?.ok_or(Error::Missing)?;
         if stored != *state {
             return Err(Error::Conflict);
@@ -135,8 +141,56 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     /// Current public verification ring. Distribute through an authenticated
     /// channel serialized with this writer; this operation is not a freshness proof.
     pub fn key_ring(&self) -> Result<&csgn::KeyRing> {
-        self.state()?;
+        let state = self.state()?;
+        let retained = state.key_transitions.last().map_or(0, |item| item.revision);
+        if self.signer.ring_revision()? != retained || self.signer.pending_transition()?.is_some() {
+            return Err(Error::ReloadRequired);
+        }
         self.signer.key_ring().map_err(Error::from)
+    }
+
+    /// Original durable continuity proofs; no member signing or storage counters.
+    pub fn key_transitions(&self) -> Result<&[cbcn::KeyTransition]> {
+        self.key_ring()?;
+        Ok(&self.state()?.key_transitions)
+    }
+
+    async fn retain_pending_transition(&mut self) -> Result<()> {
+        let revision = self.signer.ring_revision()?;
+        let retained = self.state()?.key_transitions.last();
+        let last = retained.map_or(0, |item| item.revision);
+        let Some(proof) = self.signer.pending_transition()?.map(<[u8]>::to_vec) else {
+            return if revision == last {
+                Ok(())
+            } else {
+                Err(Error::Corrupt)
+            };
+        };
+        if revision == last {
+            if retained.map(|item| item.proof.as_slice()) != Some(proof.as_slice()) {
+                return Err(Error::Corrupt);
+            }
+        } else {
+            if Some(revision) != last.checked_add(1) {
+                return Err(Error::Corrupt);
+            }
+            let mut next = self.state()?.clone();
+            next.key_transitions
+                .push(cbcn::KeyTransition { revision, proof });
+            self.commit(next).await?;
+        }
+        // The original proof is already in the Policy CAS before the signer may drop it.
+        self.signer.acknowledge_transition(revision).await?;
+        Ok(())
+    }
+
+    fn transition_deadline(&self, now: u64) -> Result<u64> {
+        if self.state()?.key_transitions.len() >= cbcn::MAX_KEY_TRANSITIONS {
+            return Err(Error::Invalid("key history exhausted"));
+        }
+        crate::day(now)
+            .checked_add(self.key_ring()?.max_validity())
+            .ok_or(Error::Invalid("time overflow"))
     }
 
     /// Current validated schema, when installed. No member profile is stored.
@@ -328,14 +382,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     pub async fn trust_feed(&mut self, now: u64) -> Result<std::sync::Arc<cbcn::Feed>> {
         let revision = self.current().await?.revision;
         let epoch = self.epoch(now).await?;
+        // Every retained ring change advances the Policy CAS before publication.
+        // current() also refuses an unacknowledged or mismatched signer floor.
         match self.beacon.current(now) {
-            Ok(feed)
-                if feed.revision == revision
-                    && feed.policy_epoch == epoch
-                    && feed.key_ring == self.key_ring()?.to_cbor() =>
-            {
-                Ok(feed)
-            }
+            Ok(feed) if feed.revision == revision && feed.policy_epoch == epoch => Ok(feed),
             Err(cbcn::Error::ClockRegression) => Err(Error::Verification),
             _ => self.refresh_trust(now).await,
         }
@@ -693,19 +743,19 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     /// retained by csgn for all still-valid signatures, including snapshots.
     pub async fn rotate(&mut self, key: csgn::SecretKey, now: u64) -> Result<()> {
         self.current().await?;
+        let until = self.transition_deadline(now)?;
         self.signer
-            .rotate(key, crate::day(now))
-            .await
-            .map_err(Error::from)
+            .rotate_with_proof(key, crate::day(now), until)
+            .await?;
+        self.retain_pending_transition().await
     }
 
     /// Prune only expired retired public keys through csgn.
     pub async fn prune_keys(&mut self, now: u64) -> Result<()> {
         self.current().await?;
-        self.signer
-            .prune(crate::day(now))
-            .await
-            .map_err(Error::from)
+        let until = self.transition_deadline(now)?;
+        self.signer.prune_with_proof(crate::day(now), until).await?;
+        self.retain_pending_transition().await
     }
 }
 
