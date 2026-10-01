@@ -1,4 +1,4 @@
-use crlt::{Community, Db, params};
+use crlt::{Community, Db, Value, params};
 
 use super::MAX_STORED_DOCUMENT_BYTES;
 use super::{Storage, StoredPolicy, validate_transition};
@@ -49,14 +49,32 @@ impl LibsqlStore {
     /// Verify every SQL statement's query plan without changing data.
     pub async fn check_query_plans(&self) -> Result<()> {
         for (sql, parameters) in [
-            (SELECT, params![1i64]),
-            (INSERT, params![1i64, 1i64, "{}"]),
-            (UPDATE, params![2i64, "{}", 1i64, 1i64]),
-            (REVOKED, params!["member:example"]),
-            (REVOKE, params!["member:example"]),
-            (RESTORE, params!["member:example"]),
+            (SELECT, vec![Value::Integer(1)]),
+            (
+                INSERT,
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(1),
+                    Value::Text("{}".into()),
+                ],
+            ),
+            (
+                UPDATE,
+                vec![
+                    Value::Integer(2),
+                    Value::Text("{}".into()),
+                    Value::Integer(1),
+                    Value::Integer(1),
+                ],
+            ),
+            (REVOKED, vec![Value::Text("member:example".into())]),
+            (REVOKE, vec![Value::Text("member:example".into())]),
+            (RESTORE, vec![Value::Text("member:example".into())]),
         ] {
-            self.scope.explain(sql, parameters).await?.assert_indexed()?;
+            self.scope
+                .explain(sql, parameters)
+                .await?
+                .assert_indexed()?;
         }
         Ok(())
     }

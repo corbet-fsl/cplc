@@ -61,6 +61,7 @@ jobs:
           path: rustfmt.patch
       - run: test ! -s rustfmt.patch
       - run: python3 .github/check-first-party.py
+      - run: python3 .github/test-check-source-coverage.py
   check:
     needs: resolve
     runs-on: ubuntu-24.04

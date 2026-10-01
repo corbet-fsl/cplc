@@ -157,19 +157,30 @@ async fn complete_archive_and_resolved_settings_respect_signed_payload_budget() 
     policy.set_schema(first).await.unwrap();
     let mut next = schema(3);
     next.public[0].label = "b".repeat(800_000);
-    assert!(matches!(policy.set_schema(next).await, Err(Error::Invalid("payload size"))));
+    assert!(matches!(
+        policy.set_schema(next).await,
+        Err(Error::Invalid("payload size"))
+    ));
     // The rejected archive leaves the prior schema and signed publication usable.
     policy.publish(SnapshotKind::Schema, NOW).await.unwrap();
 
     let mut rules = book(admission());
-    rules.define("large", crbk::Setting {
-        value_type: crbk::SettingType::String,
-        nullable: false,
-        default: json!("x".repeat(MAX_DOCUMENT_BYTES)),
-        bounds: Default::default(),
-        lowest_layer: crbk::Layer::Community,
-        kind: crbk::SettingKind::Technical,
-    }).unwrap();
+    rules
+        .define(
+            "large",
+            crbk::Setting {
+                value_type: crbk::SettingType::String,
+                nullable: false,
+                default: json!("x".repeat(MAX_DOCUMENT_BYTES)),
+                bounds: Default::default(),
+                lowest_layer: crbk::Layer::Community,
+                kind: crbk::SettingKind::Technical,
+            },
+        )
+        .unwrap();
     let mut policy = memory_with(rules).await;
-    assert!(matches!(policy.publish(SnapshotKind::Settings, NOW).await, Err(Error::Invalid("payload size"))));
+    assert!(matches!(
+        policy.publish(SnapshotKind::Settings, NOW).await,
+        Err(Error::Invalid("payload size"))
+    ));
 }

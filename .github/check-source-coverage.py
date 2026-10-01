@@ -114,9 +114,24 @@ def check(lcov, raw_json, root, annotated):
         raise ValueError('Incomplete emitted line inventory')
     if any((lines[key] > 0) != hit for key, hit in annotated_lines.items()):
         raise ValueError('Inconsistent emitted line coverage')
-    missing_lines = [key for key, count in lines.items() if count == 0]
+    allowed = set()
+    for item in json.loads((root / 'docs/coverage-exclusions.json').read_text()):
+        path, line = item['path'], item['line']
+        key = (path, line)
+        source = (root / path).read_text().splitlines()
+        if (source_path(root / path) != path or not isinstance(line, int)
+                or line < 2 or not item['reason'] or key in allowed
+                or source[line - 2:line + 1] != item['context']):
+            raise ValueError('Exclusion no longer matches its source and reason')
+        if key not in lines or lines[key] != 0:
+            raise ValueError('Exclusion must name an emitted, unexecuted line')
+        if any((entry[0], entry[1]) == key for entry in branches):
+            raise ValueError('A line-only exclusion cannot contain a branch')
+        allowed.add(key)
+    measured = {key: count for key, count in lines.items() if key not in allowed}
+    missing_lines = [key for key, count in measured.items() if count == 0]
     missing_branches = [key for key, count in branches.items() if count == 0]
-    print(f'lines: {len(lines) - len(missing_lines)}/{len(lines)}')
+    print(f'lines: {len(measured) - len(missing_lines)}/{len(measured)}; exclusions: {len(allowed)}')
     print(f'branches: {len(branches) - len(missing_branches)}/{len(branches)}')
     if missing_lines or missing_branches:
         raise ValueError(f'Uncovered source lines: {missing_lines}; branches: {missing_branches}')
