@@ -14,7 +14,9 @@ Dependabot proposes lockfile updates for review and merging after full CI.
 The checked-in lock and per-run artifacts retain exact reproducible resolutions.
 
 The source gate reuses the shared policy-track LCOV/JSON inventory validator.
-Both formats come from the same instrumented execution. Every emitted production
+LCOV, JSON and annotated text come from the same instrumented execution.
+Every source-line location and hit/miss is cross-checked against annotated text;
+JSON alone cannot prove this inventory when generic summaries differ. Every emitted production
 source line and branch must execute; JSON and annotated instantiations remain
 diagnostics. Source coverage does not claim each generic instantiation. No
 production exclusion is configured. Private boundary vectors call actual

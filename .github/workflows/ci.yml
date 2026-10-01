@@ -37,10 +37,14 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           cache-on-failure: true
+      - name: Verify the committed dependency snapshot before refreshing
+        run: |
+          cargo metadata --locked --format-version 1 > dependency-metadata.json
+          python3 .github/check-first-party.py
       - name: Refresh one reproducible dependency snapshot
         run: cargo update
       - name: Resolve one snapshot for every job
-        run: cargo metadata --format-version 1 > dependency-metadata.json
+        run: cargo metadata --locked --format-version 1 > dependency-metadata.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: resolved-lock
@@ -126,4 +130,4 @@ jobs:
             coverage.json
             coverage.lcov
             coverage.txt
-      - run: python3 .github/check-source-coverage.py coverage.lcov coverage.json
+      - run: python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt

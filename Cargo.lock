@@ -698,7 +698,7 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 [[package]]
 name = "cgrd"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cgrd?branch=main#a13f41e37515374bda5b9ee6a8e6bb35fcc2a91e"
+source = "git+https://github.com/corbet-foss/cgrd?branch=main#efbc07feea484d1a69ed5a46b27cfefe39c4c551"
 dependencies = [
  "bigdecimal",
  "cpns",
@@ -1230,7 +1230,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?branch=main#a681cb0c84c25119d83ce9fc0194a115f2a17f59"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#5ca86e4624a56e43e9df7dbc169bcca967b8f817"
 dependencies = [
  "crlt",
  "p256",
@@ -1304,7 +1304,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?branch=main#2d31f7e678801b7feaa16f70641f79e6d50a12dc"
+source = "git+https://github.com/corbet-foss/cvfy?branch=main#df40d10924d717eea5776fcbb5bf5b9794931a69"
 dependencies = [
  "czkp",
  "data-encoding",

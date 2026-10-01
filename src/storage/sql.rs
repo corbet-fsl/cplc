@@ -48,20 +48,15 @@ impl LibsqlStore {
 
     /// Verify every SQL statement's query plan without changing data.
     pub async fn check_query_plans(&self) -> Result<()> {
-        self.scope.explain(SELECT, [1i64]).await?.assert_indexed()?;
-        self.scope
-            .explain(INSERT, params![1i64, 1i64, "{}"])
-            .await?
-            .assert_indexed()?;
-        self.scope
-            .explain(UPDATE, params![2i64, "{}", 1i64, 1i64])
-            .await?
-            .assert_indexed()?;
-        for sql in [REVOKED, REVOKE, RESTORE] {
-            self.scope
-                .explain(sql, ["member:example"])
-                .await?
-                .assert_indexed()?;
+        for (sql, parameters) in [
+            (SELECT, params![1i64]),
+            (INSERT, params![1i64, 1i64, "{}"]),
+            (UPDATE, params![2i64, "{}", 1i64, 1i64]),
+            (REVOKED, params!["member:example"]),
+            (REVOKE, params!["member:example"]),
+            (RESTORE, params!["member:example"]),
+        ] {
+            self.scope.explain(sql, parameters).await?.assert_indexed()?;
         }
         Ok(())
     }
