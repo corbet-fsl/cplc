@@ -181,3 +181,59 @@ fn encoded_payload_bound_is_checked_before_signing() {
         Err(Error::Invalid("payload size"))
     ));
 }
+
+#[tokio::test]
+async fn incomplete_or_conflicting_retained_key_state_never_publishes() {
+    for case in 0..3 {
+        let signer = csgn::PersistentSigner::create(
+            csgn::MemoryStore::default(),
+            "garden",
+            csgn::SecretKey::from_seed(&mut [21; 32]),
+            0,
+            crate::DAY,
+        )
+        .await
+        .unwrap();
+        let mut policy = Policy::create(
+            crbk::MemoryStore::default(),
+            crate::MemoryStore::new("garden").unwrap(),
+            signer,
+            state().config,
+        )
+        .await
+        .unwrap();
+        let proof = policy
+            .signer
+            .rotate_with_proof(csgn::SecretKey::from_seed(&mut [22; 32]), 0, crate::DAY)
+            .await
+            .unwrap();
+        assert!(matches!(policy.key_ring(), Err(Error::ReloadRequired)));
+        match case {
+            0 => {
+                policy.signer.acknowledge_transition(1).await.unwrap();
+            }
+            1 => {
+                let mut next = policy.state().unwrap().clone();
+                next.key_transitions.push(cbcn::KeyTransition {
+                    revision: 1,
+                    proof: vec![1],
+                });
+                policy.commit(next).await.unwrap();
+            }
+            _ => {
+                policy.signer.acknowledge_transition(1).await.unwrap();
+                policy
+                    .signer
+                    .rotate_with_proof(csgn::SecretKey::from_seed(&mut [23; 32]), 0, crate::DAY)
+                    .await
+                    .unwrap();
+            }
+        }
+        assert!(matches!(
+            policy.retain_pending_transition().await,
+            Err(Error::Corrupt)
+        ));
+        assert!(matches!(policy.key_ring(), Err(Error::ReloadRequired)));
+        assert!(!proof.is_empty());
+    }
+}

@@ -594,7 +594,11 @@ async fn rotate_retains_old_credential_and_uses_new_key() {
         policy.rotate(key(1), 102).await,
         Err(Error::Signing)
     ));
-    policy.prune_keys(86_400).await.unwrap();
+    // The rotation endorsement itself keeps its predecessor verifiable for 30 days.
+    policy
+        .prune_keys(ESTABLISHED_MEMBER_VALIDITY)
+        .await
+        .unwrap();
     assert_eq!(policy.key_ring().unwrap().keys().len(), 1);
 }
 

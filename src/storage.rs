@@ -35,12 +35,14 @@ pub struct StoredPolicy {
     pub(crate) communities: BTreeSet<String>,
     pub(crate) revocations: Revocations,
     pub(crate) publications: BTreeMap<SnapshotKind, Publication>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) key_transitions: Vec<cbcn::KeyTransition>,
 }
 
 // Five independently bounded COSE publications, each encoded as JSON byte
 // arrays (at most four bytes per byte), plus the bounded core document.
 pub(crate) const MAX_STORED_DOCUMENT_BYTES: usize =
-    MAX_DOCUMENT_BYTES + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192);
+    MAX_DOCUMENT_BYTES + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 4 * cbcn::MAX_KEY_TRANSITION_BYTES;
 
 impl StoredPolicy {
     /// Scope permanently bound to this document.
@@ -59,6 +61,7 @@ impl StoredPolicy {
     pub(crate) fn validate(&self) -> Result<()> {
         identifier(&self.community)?;
         self.config.validate()?;
+        cbcn::validate_transition_history(&self.key_transitions).map_err(|_| Error::Corrupt)?;
         if self.revision == 0
             || self.revision > i64::MAX as u64
             || self.epoch == 0
@@ -113,6 +116,7 @@ impl StoredPolicy {
         }
         let mut document = self.clone();
         document.revocations = Revocations::default();
+        document.key_transitions.clear();
         // Publications have independent bounded envelopes. Charging their JSON
         // byte-array expansion against the core budget makes a valid schema
         // impossible to publish after it has already replaced the old epoch.
@@ -161,7 +165,10 @@ pub(crate) fn validate_transition(
         return Err(Error::Corrupt);
     }
     if let Some(previous) = previous {
-        if next.epoch < previous.epoch || next.config != previous.config {
+        if next.epoch < previous.epoch
+            || next.config != previous.config
+            || !next.key_transitions.starts_with(&previous.key_transitions)
+        {
             return Err(Error::Corrupt);
         }
         if let Some(old) = &previous.schema {

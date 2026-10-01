@@ -42,7 +42,7 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
     assert_eq!(old.community(), COMMUNITY);
     assert!(old.epoch() > 0);
     let base = serde_json::to_value(&old).unwrap();
-    for case in 0..24 {
+    for case in 0..27 {
         let mut next = base.clone();
         next["revision"] = json!(old.revision() + 1);
         match case {
@@ -91,7 +91,13 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
             20 => next["community"] = json!(""),
             21 => next["schema"]["public"][0]["label"] = json!("x".repeat(MAX_DOCUMENT_BYTES)),
             22 => next["config"]["credential_action"] = json!(""),
-            _ => next["schema_versions"] = json!(vec![next["schema_versions"][0].clone(); 2]),
+            23 => next["schema_versions"] = json!(vec![next["schema_versions"][0].clone(); 2]),
+            24 => next["key_transitions"] = json!([{"revision":0,"proof":[1]}]),
+            25 => next["key_transitions"] = json!([{"revision":1,"proof":[]}]),
+            _ => {
+                next["key_transitions"] =
+                    json!([{"revision":1,"proof":vec![0u8; cbcn::MAX_KEY_TRANSITION_BYTES + 1]}]);
+            }
         }
         let next: StoredPolicy = serde_json::from_value(next).unwrap();
         assert!(
@@ -159,7 +165,10 @@ async fn actual_sql_decoder_rejects_bad_scope_revision_and_revocation_rows() {
                         "UPDATE cplc_policy SET document = ?1 WHERE slot = ?2",
                         crlt::params![
                             "x".repeat(
-                                MAX_DOCUMENT_BYTES + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 1
+                                MAX_DOCUMENT_BYTES
+                                    + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192)
+                                    + 4 * cbcn::MAX_KEY_TRANSITION_BYTES
+                                    + 1
                             ),
                             1i64
                         ],
