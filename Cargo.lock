@@ -636,7 +636,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://github.com/corbet-foss/cbcn?branch=main#903c60a002ae7b667bee93aa166fbf8d21b03298"
+source = "git+https://github.com/corbet-foss/cbcn?branch=main#8f67fb43038bd2ca3acfddc40a9026f8f0f01182"
 dependencies = [
  "csgn",
  "serde",
@@ -1118,7 +1118,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#6ca3bd1035fcf17c2c88cdae3ed913da49740252"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#9569c591f35f028fbf802a02fc23c6cf5a35bdf6"
 dependencies = [
  "deadpool",
  "libsql",
@@ -1205,7 +1205,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/csgn?branch=main#96f946b89efd67d79f841259ee914a4f6f43dcd0"
+source = "git+https://github.com/corbet-foss/csgn?branch=main#fac7f49eeb4e4bb9b72de640b46e55d8fe99119c"
 dependencies = [
  "ciborium-ll",
  "coset",
@@ -3328,7 +3328,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -4519,7 +4519,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
