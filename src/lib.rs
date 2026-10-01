@@ -70,6 +70,18 @@ impl From<crbk::Error> for Error {
     }
 }
 
+impl From<crlt::Error> for Error {
+    fn from(_: crlt::Error) -> Self {
+        Self::Storage
+    }
+}
+
+impl From<csgn::StorageError> for Error {
+    fn from(_: csgn::StorageError) -> Self {
+        Self::Signing
+    }
+}
+
 pub(crate) fn identifier(value: &str) -> Result<()> {
     if value.trim().is_empty() || value.len() > 256 || value.contains('\0') {
         return Err(Error::Invalid("identifier"));

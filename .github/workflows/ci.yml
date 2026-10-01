@@ -82,7 +82,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: python3 .github/check-first-party.py
       - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
+      - run: cargo test --locked --no-fail-fast
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
         with:
           tool: cargo-deny
@@ -126,4 +126,4 @@ jobs:
             coverage.json
             coverage.lcov
             coverage.txt
-      - run: python3 .github/check-coverage.py coverage.json
+      - run: python3 .github/check-source-coverage.py coverage.lcov coverage.json

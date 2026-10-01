@@ -698,7 +698,7 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 [[package]]
 name = "cgrd"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cgrd?branch=main#540db6bb67af34d4eae99fc3d05c3d3af1943ed8"
+source = "git+https://github.com/corbet-foss/cgrd?branch=main#a13f41e37515374bda5b9ee6a8e6bb35fcc2a91e"
 dependencies = [
  "bigdecimal",
  "cpns",
@@ -942,6 +942,7 @@ dependencies = [
  "crlt",
  "csgn",
  "cshm",
+ "libsql",
  "rand 0.8.8",
  "serde",
  "serde_json",
@@ -965,7 +966,7 @@ dependencies = [
 [[package]]
 name = "cpsd"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpsd?branch=main#35b092608d275182eff03cb8e3a3b54a875a6cb8"
+source = "git+https://github.com/corbet-foss/cpsd?branch=main#d049fd40f8105f634472feb2595db317e997f7e3"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1116,7 +1117,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#52838ac15102129d4d3161f4dfdaf4603e84ad8f"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#6ca3bd1035fcf17c2c88cdae3ed913da49740252"
 dependencies = [
  "deadpool",
  "libsql",
@@ -1229,7 +1230,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?branch=main#bf8de7e83c2fe923ac5ca7a84167824c6dc5f89b"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#a681cb0c84c25119d83ce9fc0194a115f2a17f59"
 dependencies = [
  "crlt",
  "p256",
@@ -1303,7 +1304,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?branch=main#3445fce1552b534b98871c027b2d3e19cd064386"
+source = "git+https://github.com/corbet-foss/cvfy?branch=main#2d31f7e678801b7feaa16f70641f79e6d50a12dc"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -1314,7 +1315,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/czkp?branch=main#976435f44c6e387f76387c945bd39c0122f6c650"
+source = "git+https://github.com/corbet-foss/czkp?branch=main#d2e969d3c631c6baf9d4e129b62dda0f10129a0b"
 dependencies = [
  "data-encoding",
  "ed25519-dalek 2.2.0",

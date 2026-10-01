@@ -104,3 +104,35 @@ async fn real_signed_snapshots_refuse_zero_epoch_oversized_revision_and_wrong_ki
         .is_err()
     );
 }
+
+#[tokio::test]
+async fn real_rulebook_conflict_and_expired_signing_budget_fail_closed() {
+    let mut policy = memory().await;
+    assert!(matches!(
+        policy
+            .schedule_rules(None, change(book(admission()), 2, 200))
+            .await,
+        Err(Error::Conflict)
+    ));
+    let signer =
+        csgn::PersistentSigner::create(csgn::MemoryStore::default(), COMMUNITY, key(1), 0, 1000)
+            .await
+            .unwrap();
+    let mut policy = Policy::create(
+        crbk::MemoryStore::default(),
+        MemoryStore::new(COMMUNITY).unwrap(),
+        signer,
+        config(),
+    )
+    .await
+    .unwrap();
+    configure(&mut policy, book(admission())).await;
+    assert!(matches!(
+        policy.publish(SnapshotKind::Settings, 1200).await,
+        Err(Error::Invalid("empty validity"))
+    ));
+    assert!(matches!(
+        policy.refresh_trust(1200).await,
+        Err(Error::Verification)
+    ));
+}

@@ -94,3 +94,82 @@ async fn beacon_refreshes_rotated_keys_and_expired_envelopes() {
             .is_ok()
     );
 }
+
+#[tokio::test]
+async fn beacon_refreshes_at_scheduled_policy_activation() {
+    let mut policy = memory().await;
+    policy
+        .schedule_rules(Some(1), change(book(admission()), 2, DAY as i64))
+        .await
+        .unwrap();
+    let before = policy.trust_feed(NOW).await.unwrap();
+    let after = policy.trust_feed(DAY).await.unwrap();
+    assert!(after.policy_epoch > before.policy_epoch);
+    assert!(after.revision > before.revision);
+}
+
+#[tokio::test]
+async fn beacon_detects_a_rulebook_change_without_a_policy_store_revision_change() {
+    let (_directory, _db, rules_db, mut policy) = local().await;
+    let rules = crbk::LibsqlStore::new(rules_db);
+    let before = policy.trust_feed(NOW).await.unwrap();
+    // Fault the actual upstream rulebook store independently of the facade's
+    // publication counter. A cached feed must not hide the changed authority.
+    let current = crbk::Storage::load(&rules, COMMUNITY, crbk::Selection::Latest)
+        .await
+        .unwrap()
+        .unwrap();
+    crbk::Storage::append(
+        &rules,
+        COMMUNITY,
+        Some(1),
+        change(current.change.rulebook, 2, (NOW + 1) as i64),
+    )
+    .await
+    .unwrap();
+    let after = policy.trust_feed(NOW + 1).await.unwrap();
+    assert!(after.policy_epoch > before.policy_epoch);
+    assert!(after.revision > before.revision);
+}
+
+#[tokio::test]
+async fn partial_sql_publication_failure_never_exposes_a_mixed_cached_feed() {
+    let (directory, db, rules_db, mut policy) = local().await;
+    let before = policy.trust_feed(NOW).await.unwrap();
+    let raw = libsql::Builder::new_local(directory.path().join("policy.db"))
+        .build()
+        .await
+        .unwrap();
+    raw.connect().unwrap().execute_batch(
+        "CREATE TRIGGER stop_partial BEFORE UPDATE ON cplc_policy WHEN json_extract(NEW.document, '$.publications.schema_versions.revision') > 1 BEGIN SELECT RAISE(ABORT, 'fault'); END;",
+    ).await.unwrap();
+    assert!(matches!(
+        policy.refresh_trust(NOW + 1).await,
+        Err(Error::Verification)
+    ));
+    assert!(policy.trust_feed(NOW + 1).await.is_err());
+    raw.connect()
+        .unwrap()
+        .execute_batch("DROP TRIGGER stop_partial;")
+        .await
+        .unwrap();
+    let signer = csgn::PersistentSigner::open(
+        csgn::LibsqlStore::new(db.community(COMMUNITY).unwrap()),
+        COMMUNITY,
+        key(1),
+        0,
+    )
+    .await
+    .unwrap();
+    let mut reopened = Policy::open(
+        crbk::LibsqlStore::new(rules_db),
+        LibsqlStore::new(&db, COMMUNITY).unwrap(),
+        signer,
+    )
+    .await
+    .unwrap();
+    let after = reopened.trust_feed(NOW + 2).await.unwrap();
+    assert!(after.revision > before.revision);
+    assert_ne!(after.settings, before.settings);
+    assert_ne!(after.schema_versions, before.schema_versions);
+}

@@ -5,6 +5,10 @@ use cplc::*;
 use serde_json::{Value, json};
 
 async fn baseline() -> (MemoryStore, StoredPolicy) {
+    baseline_after(false).await
+}
+
+async fn baseline_after(advance: bool) -> (MemoryStore, StoredPolicy) {
     let store = MemoryStore::new(COMMUNITY).unwrap();
     let signer = csgn::PersistentSigner::create(
         csgn::MemoryStore::default(),
@@ -25,6 +29,10 @@ async fn baseline() -> (MemoryStore, StoredPolicy) {
     .unwrap();
     configure(&mut policy, book(admission())).await;
     policy.publish(SnapshotKind::Settings, NOW).await.unwrap();
+    if advance {
+        policy.set_schema(schema(2)).await.unwrap();
+        policy.publish(SnapshotKind::Settings, NOW).await.unwrap();
+    }
     (store.clone(), store.load().await.unwrap().unwrap())
 }
 
@@ -34,7 +42,7 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
     assert_eq!(old.community(), COMMUNITY);
     assert!(old.epoch() > 0);
     let base = serde_json::to_value(&old).unwrap();
-    for case in 0..23 {
+    for case in 0..24 {
         let mut next = base.clone();
         next["revision"] = json!(old.revision() + 1);
         match case {
@@ -82,7 +90,8 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
             19 => next["schema"]["community"] = json!("other"),
             20 => next["community"] = json!(""),
             21 => next["schema"]["public"][0]["label"] = json!("x".repeat(MAX_DOCUMENT_BYTES)),
-            _ => next["config"]["credential_action"] = json!(""),
+            22 => next["config"]["credential_action"] = json!(""),
+            _ => next["schema_versions"] = json!(vec![next["schema_versions"][0].clone(); 2]),
         }
         let next: StoredPolicy = serde_json::from_value(next).unwrap();
         assert!(
@@ -212,5 +221,79 @@ async fn actual_sql_decoder_rejects_bad_scope_revision_and_revocation_rows() {
             matches!(store.load().await, Err(Error::Corrupt)),
             "case {case}"
         );
+    }
+}
+
+#[tokio::test]
+async fn real_sql_triggers_and_missing_revocation_storage_refuse_partial_writes() {
+    for case in 0..4 {
+        let (directory, db, _rules, mut policy) = local().await;
+        if case == 2 {
+            policy
+                .set_revocations(Revocations {
+                    members: [MEMBER.into()].into(),
+                    devices: Default::default(),
+                })
+                .await
+                .unwrap();
+        }
+        let store = LibsqlStore::new(&db, COMMUNITY).unwrap();
+        let old = store.load().await.unwrap().unwrap();
+        let mut next = serde_json::to_value(&old).unwrap();
+        next["revision"] = json!(old.revision() + 1);
+        next["revocations"]["members"] = if case == 1 {
+            json!([MEMBER])
+        } else {
+            json!([])
+        };
+        let next: StoredPolicy = serde_json::from_value(next).unwrap();
+        // Deliberately fault the actual upstream database, outside the guarded crlt migration API.
+        let raw = libsql::Builder::new_local(directory.path().join("policy.db"))
+            .build()
+            .await
+            .unwrap();
+        let fault = match case {
+            0 => {
+                "CREATE TRIGGER stop_update BEFORE UPDATE ON cplc_policy BEGIN SELECT RAISE(IGNORE); END;"
+            }
+            1 => {
+                "CREATE TRIGGER stop_revoke BEFORE INSERT ON cplc_revocation BEGIN SELECT RAISE(ABORT, 'fault'); END;"
+            }
+            2 => {
+                "CREATE TRIGGER stop_restore BEFORE DELETE ON cplc_revocation BEGIN SELECT RAISE(ABORT, 'fault'); END;"
+            }
+            _ => "DROP TABLE cplc_revocation;",
+        };
+        raw.connect().unwrap().execute_batch(fault).await.unwrap();
+        let result = store.compare_exchange(Some(old.revision()), &next).await;
+        if case == 0 {
+            assert!(matches!(result, Err(Error::Conflict)));
+        } else {
+            assert!(matches!(result, Err(Error::Storage)));
+        }
+        if case != 3 {
+            assert_eq!(store.load().await.unwrap().as_ref(), Some(&old));
+        }
+    }
+}
+
+#[tokio::test]
+async fn actual_store_refuses_lower_schema_and_publication_versions() {
+    let (store, old) = baseline_after(true).await;
+    for schema_rollback in [true, false] {
+        let mut next = serde_json::to_value(&old).unwrap();
+        next["revision"] = json!(old.revision() + 1);
+        if schema_rollback {
+            next["schema"] = serde_json::to_value(schema(1)).unwrap();
+            next["schema_versions"] = json!([next["schema_versions"][0].clone()]);
+        } else {
+            next["publications"]["settings"]["revision"] = json!(1);
+        }
+        let next: StoredPolicy = serde_json::from_value(next).unwrap();
+        assert!(matches!(
+            store.compare_exchange(Some(old.revision()), &next).await,
+            Err(Error::Corrupt)
+        ));
+        assert_eq!(store.load().await.unwrap().as_ref(), Some(&old));
     }
 }

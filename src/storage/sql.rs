@@ -42,37 +42,26 @@ impl LibsqlStore {
     pub fn new(db: &Db, community: impl Into<String>) -> Result<Self> {
         let name = community.into();
         identifier(&name)?;
-        let scope = db.community(name.clone()).map_err(|_| Error::Storage)?;
+        let scope = db.community(name.clone())?;
         Ok(Self { name, scope })
     }
 
     /// Verify every SQL statement's query plan without changing data.
     pub async fn check_query_plans(&self) -> Result<()> {
-        self.scope
-            .explain(SELECT, [1i64])
-            .await
-            .map_err(|_| Error::Storage)?
-            .assert_indexed()
-            .map_err(|_| Error::Storage)?;
+        self.scope.explain(SELECT, [1i64]).await?.assert_indexed()?;
         self.scope
             .explain(INSERT, params![1i64, 1i64, "{}"])
-            .await
-            .map_err(|_| Error::Storage)?
-            .assert_indexed()
-            .map_err(|_| Error::Storage)?;
+            .await?
+            .assert_indexed()?;
         self.scope
             .explain(UPDATE, params![2i64, "{}", 1i64, 1i64])
-            .await
-            .map_err(|_| Error::Storage)?
-            .assert_indexed()
-            .map_err(|_| Error::Storage)?;
+            .await?
+            .assert_indexed()?;
         for sql in [REVOKED, REVOKE, RESTORE] {
             self.scope
                 .explain(sql, ["member:example"])
-                .await
-                .map_err(|_| Error::Storage)?
-                .assert_indexed()
-                .map_err(|_| Error::Storage)?;
+                .await?
+                .assert_indexed()?;
         }
         Ok(())
     }
@@ -94,17 +83,11 @@ fn entries(revocations: &crate::Revocations) -> Result<std::collections::BTreeSe
 }
 
 async fn read(tx: &mut crlt::Transaction, scope: &str) -> Result<Option<StoredPolicy>> {
-    let mut state = decode(
-        &tx.query(SELECT, [1i64]).await.map_err(|_| Error::Storage)?,
-        scope,
-    )?;
+    let mut state = decode(&tx.query(SELECT, [1i64]).await?, scope)?;
     if let Some(state) = &mut state {
         let mut after = String::new();
         loop {
-            let rows = tx
-                .query(REVOKED, [after.as_str()])
-                .await
-                .map_err(|_| Error::Storage)?;
+            let rows = tx.query(REVOKED, [after.as_str()]).await?;
             if rows.is_empty() {
                 break;
             }
@@ -151,13 +134,13 @@ impl Storage for LibsqlStore {
         &self.name
     }
     async fn load(&self) -> Result<Option<StoredPolicy>> {
-        let mut tx = self.scope.tx().await.map_err(|_| Error::Storage)?;
+        let mut tx = self.scope.tx().await?;
         let state = read(&mut tx, &self.name).await?;
-        tx.commit().await.map_err(|_| Error::Storage)?;
+        tx.commit().await?;
         Ok(state)
     }
     async fn compare_exchange(&self, expected: Option<u64>, next: &StoredPolicy) -> Result<()> {
-        let mut tx = self.scope.tx().await.map_err(|_| Error::Storage)?;
+        let mut tx = self.scope.tx().await?;
         let previous = read(&mut tx, &self.name).await?;
         validate_transition(&self.name, previous.as_ref(), expected, next)?;
         let old_entries = entries(
@@ -168,14 +151,10 @@ impl Storage for LibsqlStore {
         )?;
         let new_entries = entries(&next.revocations)?;
         for entry in old_entries.difference(&new_entries) {
-            tx.execute(RESTORE, [entry.as_str()])
-                .await
-                .map_err(|_| Error::Storage)?;
+            tx.execute(RESTORE, [entry.as_str()]).await?;
         }
         for entry in new_entries.difference(&old_entries) {
-            tx.execute(REVOKE, [entry.as_str()])
-                .await
-                .map_err(|_| Error::Storage)?;
+            tx.execute(REVOKE, [entry.as_str()]).await?;
         }
         let mut document = next.clone();
         document.revocations = crate::Revocations::default();
@@ -192,11 +171,10 @@ impl Storage for LibsqlStore {
                 )
                 .await
             }
-        }
-        .map_err(|_| Error::Storage)?;
+        }?;
         if count != 1 {
             return Err(Error::Conflict);
         }
-        tx.commit().await.map_err(|_| Error::Storage)
+        tx.commit().await.map_err(Error::from)
     }
 }

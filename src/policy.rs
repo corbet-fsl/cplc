@@ -83,7 +83,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
 
     async fn current(&self) -> Result<&StoredPolicy> {
         let state = self.state()?;
-        self.signer.key_ring().map_err(|_| Error::Signing)?;
+        self.signer.key_ring()?;
         let stored = self.store.load().await?.ok_or(Error::Missing)?;
         if stored != *state {
             return Err(Error::Conflict);
@@ -136,7 +136,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     /// channel serialized with this writer; this operation is not a freshness proof.
     pub fn key_ring(&self) -> Result<&csgn::KeyRing> {
         self.state()?;
-        self.signer.key_ring().map_err(|_| Error::Signing)
+        self.signer.key_ring().map_err(Error::from)
     }
 
     /// Current validated schema, when installed. No member profile is stored.
@@ -374,7 +374,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 until,
             )
             .await
-            .map_err(|_| Error::Signing)
+            .map_err(Error::from)
     }
 
     /// Invalidate prior epochs without changing settings or storing member events.
@@ -416,7 +416,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 until,
             )
             .await
-            .map_err(|_| Error::Signing)
+            .map_err(Error::from)
     }
 
     /// Sole admission decision over verified settings and bound gate receipts.
@@ -501,8 +501,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let cose = self
             .signer
             .sign(kind.signing_kind(), &payload, crate::day(now), until)
-            .await
-            .map_err(|_| Error::Signing)?;
+            .await?;
         next.publications.insert(
             kind,
             Publication {
@@ -623,19 +622,17 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 now: timestamp(now)?,
             })
             .map_err(|_| Error::Verification)?;
-        validate_request(&state, &request, &gates)?;
+        validate_request(
+            &state,
+            &request.subject,
+            request.handle,
+            request.schema_version,
+            &gates,
+            request.pins,
+            request.devices,
+        )?;
         let (facts, _membership_lease) = membership.membership(request.subject.id, now).await?;
-        if facts.community != state.community
-            || facts.member != request.subject.id
-            || facts.state != crbk::MembershipState::Admitted
-            || facts.lease_end <= now
-            || facts.lease_end % crate::DAY != 0
-            || facts
-                .probation_until
-                .is_some_and(|end| end % crate::DAY != 0)
-        {
-            return Err(Error::Invalid("membership state or lease"));
-        }
+        validate_membership(&state.community, request.subject.id, &facts, now)?;
         if facts.authorized_devices.len() > MAX_ENTRIES
             || request
                 .devices
@@ -671,37 +668,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             .validity_limit(now, u64::from(days) * crate::DAY, &active)
             .await?;
         until = until.min(facts.lease_end);
-        let mut community_gates = Vec::new();
-        for gate in &gates {
-            // Ask the leaf whether each supplied assertion is usable before
-            // attesting to it, including switches, provider and proof metadata.
-            if !usable_gate(&snapshot, &request.subject, gate, timestamp(now)?)? {
-                return Err(Error::Invalid("unusable gate result"));
-            }
-            until = until
-                .min(u64::try_from(gate.valid_until).map_err(|_| Error::Invalid("proof expiry"))?);
-            if gate.level == GateLevel::Community {
-                community_gates.push(CredentialGate {
-                    gate: gate.gate.clone(),
-                    provider: gate.provider.clone(),
-                    valid_until: gate.valid_until as u64,
-                });
-            }
-        }
-        // Within one fixed policy, verified proofs can only age out. Query the
-        // real evaluator to find the exclusive end, including inclusive max age.
-        if !decide(timestamp(until - 1)?)?.allowed {
-            let (mut low, mut high) = (now, until - 1);
-            while high - low > 1 {
-                let middle = low + (high - low) / 2;
-                if decide(timestamp(middle)?)?.allowed {
-                    low = middle;
-                } else {
-                    high = middle;
-                }
-            }
-            until = high;
-        }
+        let (community_gates, bounded_until) =
+            credential_gates(&snapshot, &request.subject, &gates, timestamp(now)?, until)?;
+        until = bounded_until;
+        until = policy_deadline(now, until, decide)?;
         let credential = Credential {
             community: state.community,
             member: request.subject.id.into(),
@@ -716,7 +686,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         self.signer
             .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
             .await
-            .map_err(|_| Error::Signing)
+            .map_err(Error::from)
     }
 
     /// Rotate using an already provisioned secret-store key. Old public keys are
@@ -726,7 +696,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         self.signer
             .rotate(key, crate::day(now))
             .await
-            .map_err(|_| Error::Signing)
+            .map_err(Error::from)
     }
 
     /// Prune only expired retired public keys through csgn.
@@ -735,7 +705,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         self.signer
             .prune(crate::day(now))
             .await
-            .map_err(|_| Error::Signing)
+            .map_err(Error::from)
     }
 }
 
@@ -747,12 +717,11 @@ fn check_issuer<K: csgn::Store>(signer: &csgn::PersistentSigner<K>, community: &
     {
         return Err(Error::Invalid("community namespace"));
     }
-    if signer.key_ring().map_err(|_| Error::Signing)?.issuer() != community {
+    if signer.key_ring()?.issuer() != community {
         return Err(Error::Invalid("signer scope"));
     }
     if signer
-        .key_ring()
-        .map_err(|_| Error::Signing)?
+        .key_ring()?
         .active()
         .ok_or(Error::Signing)?
         .activated_at()
@@ -788,24 +757,27 @@ fn encode_snapshot<T: Serialize>(
 
 fn validate_request(
     state: &StoredPolicy,
-    request: &CredentialRequest<'_>,
+    subject: &crbk::Subject<'_>,
+    handle: &str,
+    schema_version: u32,
     gates: &[crbk::GateResult],
+    pins: &[crate::Pin],
+    devices: &[[u8; 32]],
 ) -> Result<()> {
-    identifier(request.subject.id)?;
-    identifier(request.handle)?;
+    identifier(subject.id)?;
+    identifier(handle)?;
     let schema = state.schema.as_ref().ok_or(Error::Missing)?;
-    if request.schema_version != schema.version
-        || request.subject.membership != crbk::MembershipState::Admitted
+    if schema_version != schema.version
+        || subject.membership != crbk::MembershipState::Admitted
         || gates.len() > MAX_ENTRIES
-        || request.pins.len() > MAX_ENTRIES
-        || request.devices.is_empty()
-        || request.devices.len() > MAX_ENTRIES
+        || pins.len() > MAX_ENTRIES
+        || devices.is_empty()
+        || devices.len() > MAX_ENTRIES
     {
         return Err(Error::Invalid("credential scope or size"));
     }
-    if state.revocations.members.contains(request.subject.id)
-        || request
-            .devices
+    if state.revocations.members.contains(subject.id)
+        || devices
             .iter()
             .any(|key| state.revocations.devices.contains(key))
     {
@@ -813,7 +785,7 @@ fn validate_request(
     }
     let mut gate_ids = BTreeSet::new();
     for gate in gates {
-        if gate.subject != request.subject.id
+        if gate.subject != subject.id
             || match gate.level {
                 GateLevel::Community => gate.community.as_deref() != Some(&state.community),
                 GateLevel::Global => gate.community.is_some(),
@@ -823,18 +795,18 @@ fn validate_request(
             return Err(Error::Invalid("gate binding or duplicate"));
         }
     }
-    if request.devices.iter().collect::<BTreeSet<_>>().len() != request.devices.len() {
+    if devices.iter().collect::<BTreeSet<_>>().len() != devices.len() {
         return Err(Error::Invalid("duplicate device"));
     }
-    let mut pins = BTreeSet::new();
-    for pin in request.pins {
+    let mut pin_fields = BTreeSet::new();
+    for pin in pins {
         let field = schema
             .public
             .iter()
             .chain(&schema.private)
             .find(|f| f.id == pin.field)
             .ok_or(Error::Invalid("pin field"))?;
-        if field.change_preset == cshm::ChangePreset::Free || !pins.insert(&pin.field) {
+        if field.change_preset == cshm::ChangePreset::Free || !pin_fields.insert(&pin.field) {
             return Err(Error::Invalid("pin field or duplicate"));
         }
     }
@@ -879,3 +851,77 @@ fn effective_epoch(facade: u64, rulebook: u64) -> Result<u64> {
         .filter(|n| *n <= i64::MAX as u64)
         .ok_or(Error::Invalid("epoch exhausted"))
 }
+
+// Bind every emitted credential assertion to the same real rulebook evaluation.
+fn credential_gates(
+    snapshot: &crbk::Snapshot,
+    subject: &crbk::Subject<'_>,
+    gates: &[crbk::GateResult],
+    now: i64,
+    mut until: u64,
+) -> Result<(Vec<CredentialGate>, u64)> {
+    let mut community_gates = Vec::new();
+    for gate in gates {
+        if !usable_gate(snapshot, subject, gate, now)? {
+            return Err(Error::Invalid("unusable gate result"));
+        }
+        until =
+            until.min(u64::try_from(gate.valid_until).map_err(|_| Error::Invalid("proof expiry"))?);
+        if gate.level == GateLevel::Community {
+            community_gates.push(CredentialGate {
+                gate: gate.gate.clone(),
+                provider: gate.provider.clone(),
+                valid_until: gate.valid_until as u64,
+            });
+        }
+    }
+    Ok((community_gates, until))
+}
+
+// Evaluate immutable owner-supplied membership facts while the caller holds its lease.
+fn validate_membership(
+    community: &str,
+    member: &str,
+    facts: &crate::MembershipFacts,
+    now: u64,
+) -> Result<()> {
+    if facts.community != community
+        || facts.member != member
+        || facts.state != crbk::MembershipState::Admitted
+        || facts.lease_end <= now
+        || !facts.lease_end.is_multiple_of(crate::DAY)
+        || facts
+            .probation_until
+            .is_some_and(|end| !end.is_multiple_of(crate::DAY))
+    {
+        return Err(Error::Invalid("membership state or lease"));
+    }
+    Ok(())
+}
+
+// Query the existing rulebook evaluator; this helper does not evaluate policy itself.
+fn policy_deadline(
+    now: u64,
+    mut until: u64,
+    decide: impl Fn(i64) -> crbk::Result<crbk::Decision>,
+) -> Result<u64> {
+    // Within one fixed policy, verified proofs can only age out. Preserve the
+    // exclusive end, including the rulebook's inclusive maximum proof age.
+    if !decide(timestamp(until - 1)?)?.allowed {
+        let (mut low, mut high) = (now, until - 1);
+        while high - low > 1 {
+            let middle = low + (high - low) / 2;
+            if decide(timestamp(middle)?)?.allowed {
+                low = middle;
+            } else {
+                high = middle;
+            }
+        }
+        until = high;
+    }
+    Ok(until)
+}
+
+#[cfg(test)]
+#[path = "../tests/unit/policy.rs"]
+mod tests;
