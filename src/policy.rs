@@ -48,6 +48,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             communities: BTreeSet::new(),
             revocations: Revocations::default(),
             publications: BTreeMap::new(),
+            balance: None,
             key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
@@ -132,7 +133,11 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let latest = self.rules.load(&next.community, Selection::Latest).await?;
         next.epoch = next_counter(next.epoch)?;
         effective_epoch(next.epoch, latest.map_or(0, |r| r.change.policy_epoch))?;
-        for publication in next.publications.values_mut() {
+        for publication in next
+            .publications
+            .values_mut()
+            .chain(next.balance.iter_mut())
+        {
             publication.cose = None;
         }
         Ok(())
@@ -322,6 +327,13 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         for member in &revocations.members {
             identifier(member)?;
         }
+        if revocations
+            .passkeys
+            .iter()
+            .any(|id| id.is_empty() || id.len() > 1024)
+        {
+            return Err(Error::Invalid("passkey credential ID"));
+        }
         next.revocations = revocations;
         self.advance_epoch(&mut next).await?;
         self.commit(next).await
@@ -412,6 +424,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             policy_epoch: effective_epoch(state.epoch, active.change.policy_epoch)?,
             key_ring: self.key_ring()?.to_cbor(),
             schema_version: state.schema.as_ref().ok_or(Error::Missing)?.version,
+            balance_revision: state
+                .balance
+                .as_ref()
+                .map(|publication| publication.revision),
         };
         let until = self
             .validity_limit(now, state.config.snapshot_validity, &active)
@@ -495,6 +511,80 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         Ok(snapshot
             .settings()
             .may(subject, action, &gates, timestamp(now)?)?)
+    }
+
+    /// Version supplied to the configured AccountService's canonical producer.
+    /// Serialize projection and publication with community configuration changes.
+    pub async fn balance_version(&self, now: u64) -> Result<cbcn::document::Version> {
+        let state = self.current().await?;
+        Ok(cbcn::document::Version {
+            revision: next_counter(state.balance.as_ref().map_or(0, |p| p.revision))?,
+            epoch: self.epoch(now).await?,
+        })
+    }
+
+    /// Publish the actual Balance owner's document through this durable signer.
+    /// No member request may supply this host-only configuration operation.
+    pub async fn publish_balance(
+        &mut self,
+        material: cblc::publication::PublicVerifierMaterial,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let version = self.balance_version(now).await?;
+        let mut next = self.current().await?.clone();
+        if material.revision != version.revision || material.policy_epoch != version.epoch {
+            return Err(Error::Verification);
+        }
+        material
+            .validate_at(&next.community, now)
+            .map_err(|_| Error::Verification)?;
+        let payload = serde_json::to_vec(&material).map_err(|_| Error::Corrupt)?;
+        let active = self.active(now).await?;
+        let until = self
+            .validity_limit(now, next.config.snapshot_validity, &active)
+            .await?
+            .min(material.policy.account.policy_valid_until);
+        let cose = self
+            .signer
+            .sign(
+                csgn::Kind::SettingsSnapshot,
+                &payload,
+                crate::day(now),
+                until,
+            )
+            .await?;
+        next.balance = Some(Publication {
+            revision: version.revision,
+            cose: Some(cose.clone()),
+        });
+        self.commit(next).await?;
+        Ok(cose)
+    }
+
+    /// Original Balance bytes, or absence only if accounting was never configured.
+    /// An invalidated or expired document requires a fresh owner projection.
+    pub async fn balance_publication(&self, now: u64) -> Result<Option<Vec<u8>>> {
+        let state = self.current().await?;
+        let Some(publication) = &state.balance else {
+            return Ok(None);
+        };
+        let cose = publication.cose.as_ref().ok_or(Error::Missing)?;
+        let ring = self.key_ring()?;
+        cbcn::balance::Balance::verify(
+            ring,
+            cose,
+            self.epoch(now).await?,
+            publication.revision,
+            now,
+        )
+        .map_err(|_| Error::Verification)?;
+        let signed = ring.verify(cose, csgn::Kind::SettingsSnapshot, now)?;
+        let material: cblc::publication::PublicVerifierMaterial =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        material
+            .validate_at(&state.community, now)
+            .map_err(|_| Error::Verification)?;
+        Ok(Some(cose.clone()))
     }
 
     /// Sign and durably publish one current snapshot, returning its COSE bytes.
@@ -661,6 +751,81 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         request: CredentialRequest<'_>,
         now: u64,
     ) -> Result<Vec<u8>> {
+        let (credential, until, _lease) =
+            self.credential_candidate(membership, request, now).await?;
+        let payload = encode(&credential)?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Sign original live Keyhole material under the same credential evaluation
+    /// and membership serialization lease. The request selects only a credential
+    /// ID, never a descriptor, member mapping, lifetime or authorization verdict.
+    pub async fn issue_passkey_binding<M: crate::PasskeySource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        credential_id: &[u8],
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        if credential_id.is_empty() || credential_id.len() > 1024 {
+            return Err(Error::Invalid("passkey credential ID"));
+        }
+        let (candidate, until, lease) = self.credential_candidate(membership, request, now).await?;
+        let descriptor = membership
+            .passkey(&candidate.member, credential_id, &lease, now)
+            .await?;
+        if descriptor.community() != candidate.community
+            || descriptor.credential_id() != credential_id
+            || descriptor.spki().is_empty()
+            || descriptor.spki().len() > 8192
+            || descriptor.rp_id().is_empty()
+            || descriptor.rp_id().len() > 253
+            || descriptor.origins().is_empty()
+            || descriptor.origins().len() > 32
+            || descriptor
+                .origins()
+                .iter()
+                .any(|origin| origin.len() > 2048)
+        {
+            return Err(Error::Invalid("passkey binding scope"));
+        }
+        // Re-read the original fenced state after the owner await, while the
+        // same membership lease remains alive through durable signer completion.
+        if self.epoch(now).await? != candidate.policy_epoch {
+            return Err(Error::Conflict);
+        }
+        let state = self.current().await?;
+        if state.revocations.members.contains(&candidate.member)
+            || state.revocations.passkeys.contains(credential_id)
+        {
+            return Err(Error::Revoked);
+        }
+        let payload = encode(&crate::PasskeyBinding {
+            purpose: crate::PasskeyBindingPurpose::LineageV1,
+            community: candidate.community,
+            member: candidate.member,
+            policy_epoch: candidate.policy_epoch,
+            credential: descriptor,
+        })?;
+        let result = self
+            .signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await;
+        drop(lease);
+        result.map_err(Error::from)
+    }
+
+    // One evaluation and one live membership lease for either public projection.
+    // The lease is retained by the caller throughout persistent signing.
+    async fn credential_candidate<M: crate::MembershipSource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        now: u64,
+    ) -> Result<(Credential, u64, M::Lease)> {
         let state = self.current().await?.clone();
         self.validate_snapshot(request.snapshot, now).await?;
         let gates = request
@@ -681,7 +846,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             request.pins,
             request.devices,
         )?;
-        let (facts, _membership_lease) = membership.membership(request.subject.id, now).await?;
+        let (facts, membership_lease) = membership.membership(request.subject.id, now).await?;
         validate_membership(&state.community, request.subject.id, &facts, now)?;
         if facts.authorized_devices.len() > MAX_ENTRIES
             || request
@@ -732,11 +897,76 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             pins: request.pins.to_vec(),
             devices: request.devices.to_vec(),
         };
-        let payload = encode(&credential)?;
-        self.signer
-            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
-            .await
-            .map_err(Error::from)
+        Ok((credential, until, membership_lease))
+    }
+
+    /// Issue the v3 account grant from the same current admission decision as a
+    /// credential. Policy owns the signing key and projects the actual retained
+    /// Balance digest; the caller selects only one already-authorized device.
+    pub async fn issue_account_grant<M: crate::MembershipSource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        device: [u8; 32],
+        context: crate::AccountGrantContext,
+        now: u64,
+    ) -> Result<cblc::admission::AdmissionGrant> {
+        use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
+        if context.passport_policy_digest == [0; 32]
+            || context.passport_valid_until <= now
+            || context.passport_valid_until > i64::MAX as u64
+        {
+            return Err(Error::Invalid("account passport cohort"));
+        }
+        let (credential, until, _lease) =
+            self.credential_candidate(membership, request, now).await?;
+        if !credential.devices.contains(&device) {
+            return Err(Error::Invalid("unauthorized account device"));
+        }
+        let pseudonym: [u8; 48] = HEXLOWER
+            .decode(credential.member.as_bytes())
+            .map_err(|_| Error::Invalid("account pseudonym"))?
+            .try_into()
+            .map_err(|_| Error::Invalid("account pseudonym"))?;
+        let original = self.balance_publication(now).await?.ok_or(Error::Missing)?;
+        let signed = self
+            .key_ring()?
+            .verify(&original, csgn::Kind::SettingsSnapshot, now)?;
+        let material: cblc::publication::PublicVerifierMaterial =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        let until = until
+            .min(context.passport_valid_until)
+            .min(signed.valid_until())
+            .min(material.policy.account.policy_valid_until);
+        if now >= until {
+            return Err(Error::Verification);
+        }
+        let key = self
+            .key_ring()?
+            .active()
+            .ok_or(Error::Corrupt)?
+            .public_key();
+        let mut grant = cblc::admission::AdmissionGrant {
+            version: 3,
+            issuer_key_id: cblc::admission::policy_key_id(&key),
+            community_id: credential.community,
+            member_id: cblc::admission::member_id(&pseudonym),
+            pseudonym: credential.member,
+            chat_public_key: B64.encode(&device),
+            policy_digest: B64.encode(&material.policy_digest),
+            policy_epoch: credential.policy_epoch,
+            passport_policy_digest: B64.encode(&context.passport_policy_digest),
+            issued_at: crate::day(now),
+            expires_at: until,
+            signature: String::new(),
+        };
+        let payload = cblc::admission::admission_bytes(&grant).map_err(|_| Error::Verification)?;
+        let signed = self
+            .signer
+            .sign(csgn::Kind::Credential, &payload, grant.issued_at, until)
+            .await?;
+        grant.signature = B64.encode(&signed);
+        Ok(grant)
     }
 
     /// Rotate using an already provisioned secret-store key. Old public keys are

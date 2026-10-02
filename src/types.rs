@@ -92,6 +92,10 @@ pub struct Revocations {
     pub members: BTreeSet<String>,
     /// Revoked public device keys.
     pub devices: BTreeSet<[u8; 32]>,
+    /// Revoked original community-scoped passkey credential IDs. Older stored
+    /// state predates binding issuance; newly signed snapshots always emit this set.
+    #[serde(default)]
+    pub passkeys: BTreeSet<Vec<u8>>,
 }
 
 /// Current membership facts read by the owning membership facade.
@@ -125,6 +129,47 @@ pub trait MembershipSource {
         member: &str,
         now: u64,
     ) -> impl std::future::Future<Output = Result<(MembershipFacts, Self::Lease)>>;
+}
+
+/// Read an original live Keyhole descriptor under the SAME membership lease.
+/// This is selected by the trusted service root, never a member-provided callback.
+/// cmbr must check its canonical pseudonym-to-Keyhole-member mapping and original
+/// credential liveness while the supplied per-member serialization guard is held.
+pub trait PasskeySource: MembershipSource {
+    /// Return only the exact requested credential from the original live row.
+    /// Never deserialize a descriptor supplied in the issuance request.
+    fn passkey(
+        &self,
+        member: &str,
+        credential_id: &[u8],
+        lease: &Self::Lease,
+        now: u64,
+    ) -> impl std::future::Future<Output = Result<ckyh::lineage::PublicCredential>>;
+}
+
+/// Exact domain inside the original csgn Credential envelope.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub enum PasskeyBindingPurpose {
+    /// Community membership binding for retained WebAuthn lineage evidence.
+    #[serde(rename = "cplc.passkey-lineage.v1")]
+    LineageV1,
+}
+
+/// Public Keyhole material bound to the original Policy admission decision.
+/// This payload has no proof of a fresh assertion or current lineage commit.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PasskeyBinding {
+    /// Distinct signed purpose; cannot decode as a membership credential or grant.
+    pub purpose: PasskeyBindingPurpose,
+    /// Original community namespace and COSE issuer.
+    pub community: String,
+    /// Canonical community pseudonym, bound by the original cmbr lease.
+    pub member: String,
+    /// Exact effective epoch of the admission candidate.
+    pub policy_epoch: u64,
+    /// Unmodified descriptor read from the original live Keyhole row.
+    pub credential: ckyh::lineage::PublicCredential,
 }
 
 /// A pin fingerprint supplied by the membership facade; never an opening/salt.
@@ -172,6 +217,17 @@ pub struct Credential {
     pub devices: Vec<[u8; 32]>,
 }
 
+/// The original authenticated global cohort selected by the community facade.
+/// This is a privileged owner input, never decoded from an account request.
+/// cmty owns canonical hashing of its entire PassportPolicy (epoch, deadline,
+/// and disclosed gate set), and retains its current policy lease through signing.
+pub struct AccountGrantContext {
+    /// Hash of the exact authenticated global passport policy.
+    pub passport_policy_digest: [u8; 32],
+    /// Original exclusive cohort expiry, also bounds the grant envelope.
+    pub passport_valid_until: u64,
+}
+
 /// Trusted inputs assembled by cmty from membership and gatekeeping.
 /// This is deliberately not deserializable as an untrusted request body.
 ///
@@ -212,6 +268,9 @@ pub struct TrustManifest {
     pub key_ring: Vec<u8>,
     /// Current schema version.
     pub schema_version: u32,
+    /// Required Balance document revision once accounting has been configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub balance_revision: Option<u64>,
 }
 /// Domain separation for the signed manifest payload.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

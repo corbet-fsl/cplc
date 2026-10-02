@@ -35,14 +35,16 @@ pub struct StoredPolicy {
     pub(crate) communities: BTreeSet<String>,
     pub(crate) revocations: Revocations,
     pub(crate) publications: BTreeMap<SnapshotKind, Publication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) balance: Option<Publication>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_transitions: Vec<cbcn::KeyTransition>,
 }
 
-// Five independently bounded COSE publications, each encoded as JSON byte
+// Six independently bounded COSE publications, each encoded as JSON byte
 // arrays (at most four bytes per byte), plus the bounded core document.
 pub(crate) const MAX_STORED_DOCUMENT_BYTES: usize =
-    MAX_DOCUMENT_BYTES + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 4 * cbcn::MAX_KEY_TRANSITION_BYTES;
+    MAX_DOCUMENT_BYTES + 6 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 4 * cbcn::MAX_KEY_TRANSITION_BYTES;
 
 impl StoredPolicy {
     /// Scope permanently bound to this document.
@@ -72,6 +74,14 @@ impl StoredPolicy {
         }
         for id in self.communities.iter().chain(&self.revocations.members) {
             identifier(id)?;
+        }
+        if self
+            .revocations
+            .passkeys
+            .iter()
+            .any(|id| id.is_empty() || id.len() > 1024)
+        {
+            return Err(Error::Corrupt);
         }
         if let Some(schema) = &self.schema {
             if schema.community != self.community
@@ -104,7 +114,7 @@ impl StoredPolicy {
         if previous.is_some() && previous != self.schema.as_ref() {
             return Err(Error::Corrupt);
         }
-        for publication in self.publications.values() {
+        for publication in self.publications.values().chain(self.balance.iter()) {
             if publication.revision == 0
                 || publication.revision > i64::MAX as u64
                 || publication.cose.as_ref().is_some_and(|bytes| {
@@ -120,7 +130,11 @@ impl StoredPolicy {
         // Publications have independent bounded envelopes. Charging their JSON
         // byte-array expansion against the core budget makes a valid schema
         // impossible to publish after it has already replaced the old epoch.
-        for publication in document.publications.values_mut() {
+        for publication in document
+            .publications
+            .values_mut()
+            .chain(document.balance.iter_mut())
+        {
             publication.cose = None;
         }
         if serde_json::to_vec(&document)
@@ -179,6 +193,14 @@ pub(crate) fn validate_transition(
         }
         for (kind, old) in &previous.publications {
             let new = next.publications.get(kind).ok_or(Error::Corrupt)?;
+            if new.revision < old.revision
+                || (new.revision == old.revision && new.cose.is_some() && new.cose != old.cose)
+            {
+                return Err(Error::Corrupt);
+            }
+        }
+        if let Some(old) = &previous.balance {
+            let new = next.balance.as_ref().ok_or(Error::Corrupt)?;
             if new.revision < old.revision
                 || (new.revision == old.revision && new.cose.is_some() && new.cose != old.cose)
             {

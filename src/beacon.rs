@@ -32,4 +32,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> cbcn::Publisher for Policy<R,
             .await
             .map_err(|_| cbcn::Error::Publication)
     }
+
+    async fn balance(&mut self, now: u64) -> cbcn::Result<Option<Vec<u8>>> {
+        self.balance_publication(now)
+            .await
+            .map_err(|_| cbcn::Error::Publication)
+    }
 }

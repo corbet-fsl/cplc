@@ -11,6 +11,9 @@ publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
 
 [dependencies]
+ckyh = { git = "https://github.com/corbet-foss/ckyh", branch = "main", default-features = false }
+data-encoding = "2.9"
+cblc = { git = "https://github.com/corbet-libs/cblc", branch = "main", features = ["publication"] }
 cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main" }
 cpsd = { git = "https://github.com/corbet-foss/cpsd", branch = "main" }
 cgts = { git = "https://github.com/corbet-libs/cgts", branch = "main" }
@@ -23,6 +26,7 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+sha2 = "0.11"
 libsql = { version = "0.9", default-features = false, features = ["core"] }
 clbs = { git = "https://github.com/corbet-foss/clbs", branch = "main" }
 rand = "0.8"
