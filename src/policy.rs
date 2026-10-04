@@ -493,6 +493,81 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             .map_err(Error::from)
     }
 
+    /// Sign the retained root context after the service's own authorization.
+    /// This authenticates bytes; it does not grant a role or consume a nonce.
+    pub async fn sign_root_board_issuance_context(
+        &mut self,
+        context: &cpsd::RootBoardIssuanceContext,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let payload = context.to_bytes();
+        let decoded = cpsd::RootBoardIssuanceContext::from_bytes(&payload)
+            .map_err(|_| Error::Verification)?;
+        if decoded != *context || decoded.to_bytes() != payload {
+            return Err(Error::Verification);
+        }
+        let until = self
+            .root_board_signing_deadline(context.root(), context.deadline(), now)
+            .await?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Sign the service's retained joint root presentation request.
+    /// Nonce storage and admission remain the owning service's responsibilities.
+    pub async fn sign_root_board_request(
+        &mut self,
+        request: &cpsd::RootBoardRequest,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let payload = request.to_bytes();
+        let decoded =
+            cpsd::RootBoardRequest::from_bytes(&payload).map_err(|_| Error::Verification)?;
+        if decoded != *request || decoded.to_bytes() != payload {
+            return Err(Error::Verification);
+        }
+        let until = self
+            .root_board_signing_deadline(request.root(), request.deadline(), now)
+            .await?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    async fn root_board_signing_deadline(
+        &self,
+        descriptor: &cpsd::RootBoardPublicKey,
+        deadline: u64,
+        now: u64,
+    ) -> Result<u64> {
+        let limit = now
+            .checked_add(300)
+            .ok_or(Error::Invalid("time overflow"))?;
+        let until = deadline
+            .checked_add(1)
+            .ok_or(Error::Invalid("time overflow"))?;
+        if deadline < now || deadline > limit {
+            return Err(Error::Invalid("root-board request deadline"));
+        }
+        let cose = self
+            .root_board_publication(now)
+            .await?
+            .ok_or(Error::Missing)?;
+        let signed = self
+            .key_ring()?
+            .verify(&cose, csgn::Kind::SettingsSnapshot, now)
+            .map_err(|_| Error::Verification)?;
+        let payload: cbcn::root_board::Payload =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        if payload.descriptor != descriptor.to_bytes() || until > signed.valid_until() {
+            return Err(Error::Verification);
+        }
+        Ok(until)
+    }
+
     /// Sole admission decision over verified settings and bound gate receipts.
     /// The source of membership state is cmbr; cmty only wires these capabilities.
     pub async fn may(
@@ -647,6 +722,26 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     /// Original public descriptor bytes. Absence means never configured;
     /// invalidation or expiry requires a fresh projection by the configured owner.
     pub async fn root_board_publication(&self, now: u64) -> Result<Option<Vec<u8>>> {
+        Ok(self.current_root_board(now).await?.map(|(cose, _, _)| cose))
+    }
+
+    /// Decode only the current authenticated root descriptor and its exclusive
+    /// publication expiry. Consumers must re-read after policy changes; absence
+    /// or invalidation cannot authorize ordinary-passport root admission.
+    pub async fn root_board_descriptor(
+        &self,
+        now: u64,
+    ) -> Result<Option<(cpsd::RootBoardPublicKey, u64)>> {
+        Ok(self
+            .current_root_board(now)
+            .await?
+            .map(|(_, descriptor, until)| (descriptor, until)))
+    }
+
+    async fn current_root_board(
+        &self,
+        now: u64,
+    ) -> Result<Option<(Vec<u8>, cpsd::RootBoardPublicKey, u64)>> {
         let state = self.current().await?;
         let Some(publication) = &state.root_board else {
             return Ok(None);
@@ -671,7 +766,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         {
             return Err(Error::Verification);
         }
-        Ok(Some(cose.clone()))
+        Ok(Some((cose.clone(), descriptor, material.valid_until())))
     }
 
     /// Sign and durably publish one current snapshot, returning its COSE bytes.
