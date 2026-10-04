@@ -148,3 +148,22 @@ and durable csgn Credential signing. The maintained Keyhole verifier retains
 WebAuthn parsing and signature verification; Policy adds only its existing
 member/epoch/lifetime binding under the original membership lease. No second
 passkey parser, primitive, key store or authorization database is introduced.
+
+## Common root-board public descriptor
+
+The configured owner calls `publish_root_board(&descriptor, now)` with the
+original CPSD `RootBoardPublicKey`. Policy checks its canonical codec, community,
+effective epoch and current fixed 30-day cohort before signing and committing.
+The first publication durably binds `descriptor.issuer().to_bytes()`; later
+publications preserve that issuer and cannot lower the cohort floor. Same-cohort
+refreshes advance the publication revision. Signing-key rotation uses the existing
+csgn continuity path and does not rotate the BBS issuer.
+
+`root_board_publication(now)` is absent only before configuration. Epoch changes
+invalidate its COSE bytes while retaining the issuer, cohort floor and revision;
+the owner must publish a current descriptor before refreshing the complete feed.
+The signed lifetime is capped by both Policy validity and descriptor expiry.
+The optional feed `root_board` and signed manifest `root_board_revision` carry
+this public material through Beacon and Charter. Consumers still decode with
+CPSD and check scope, epoch and lifetime against a current authenticated view.
+Publication supplies no role, nonce-consumption, credential or private-key authority.
