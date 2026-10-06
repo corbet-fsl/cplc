@@ -853,7 +853,7 @@ async fn credential_debug_omits_member_handle_pins_and_devices() {
 async fn global_issuer_namespace_is_unavailable_to_communities() {
     let signer = csgn::PersistentSigner::create(
         csgn::MemoryStore::default(),
-        "cglb:global",
+        "cgbl:global",
         key(1),
         day(NOW),
         1000,
@@ -863,7 +863,7 @@ async fn global_issuer_namespace_is_unavailable_to_communities() {
     assert!(matches!(
         Policy::create(
             crbk::MemoryStore::default(),
-            MemoryStore::new("cglb:global").unwrap(),
+            MemoryStore::new("cgbl:global").unwrap(),
             signer,
             config(),
         )

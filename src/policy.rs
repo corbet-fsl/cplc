@@ -316,7 +316,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     }
 
     /// Replace current community revocations and advance the epoch immediately.
-    /// Global suspension belongs exclusively to cglb.
+    /// Global suspension belongs exclusively to cgbl.
     pub async fn set_revocations(&mut self, revocations: Revocations) -> Result<()> {
         let mut next = self.current().await?.clone();
         for member in &revocations.members {

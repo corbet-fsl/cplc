@@ -88,7 +88,7 @@ mismatches, duplicate community gates, revoked members/devices, invalid pins,
 missing schema, wrong schema version and any membership other than Admitted fail closed, even
 when the action has no membership requirement. Credential Debug output is redacted.
 Community signer namespaces contain only ASCII letters, digits, dot, dash and
-underscore; the global cglb: namespace is reserved.
+underscore; the global cgbl: namespace is reserved.
 
 ## Durability
 
@@ -208,8 +208,8 @@ wallet key would link communities and is outside this contract. cplc also reject
 duplicates/revoked devices and cannot determine whether a public key was reused
 in another isolated community database.
 
-The global policy format consumed by cglb is signed by the separate authenticated
-global policy authority described in cglb's contract. A community signer never
+The global policy format consumed by cgbl is signed by the separate authenticated
+global policy authority described in cgbl's contract. A community signer never
 signs global policy or claims global issuance authority. Every credential renewal
 requiring global gates needs a fresh cpsd presentation verified against the
 current authenticated global epoch; a suspension prevents its next renewal.
