@@ -9,6 +9,7 @@ mod storage;
 mod types;
 mod verification;
 
+pub use cblc::publication::PublicVerifierMaterial;
 pub use policy::Policy;
 pub use storage::{LibsqlStore, MemoryStore, SCHEMA, Storage, StoredPolicy};
 pub use types::*;

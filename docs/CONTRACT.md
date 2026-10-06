@@ -276,3 +276,43 @@ silently dropped. A proof that exceeds the remaining byte budget remains durable
 and pending in csgn, and the writer refuses publication until operator recovery.
 That exceptional history-budget condition needs deployment reprovisioning; the
 facade does not invent a root reset. No private key enters Policy storage.
+
+## Balance publication composition
+
+The community host obtains `balance_version(now)` under the same serialized
+configuration operation, asks its one configured AccountService for
+`public_verifier_material(version.revision, version.epoch)`, and submits that
+canonical type to `publish_balance(material, now)`. Policy validates the owner
+semantics and exact community/counters, uses its existing persistent signer and
+publication lifetime (also capped by the material's policy expiry), commits
+the original COSE bytes through the same Policy CAS, and only then returns them.
+There is no second signer or ledger, and no member-facing material submission.
+
+`balance_publication(now)` is absent only before accounting is configured.
+Epoch changes clear bytes but preserve its required revision; stale, expired or
+unacknowledged material refuses the whole refresh until the host reprojects it.
+The manifest's optional `balance_revision` makes the extra kind mandatory when
+configured. Beacon transports the original canonical document, independently
+of the Rulebook settings field. Consumers still validate accounting semantics
+with the owner after Charter authentication. This does not prove a member's
+latest account frontier or settlement privacy.
+
+## Public passkey lineage binding
+
+`issue_passkey_binding` signs the original live `ckyh::lineage::PublicCredential`
+under the same credential decision and retained membership lease. Its separate
+`PasskeySource` owner port checks the original member mapping/live row while that
+lease remains held. Only a credential ID is selected by the request; no descriptor
+or authorization verdict is accepted. The original csgn Credential payload has
+purpose `cplc.passkey-lineage.v1`, community, canonical member, effective epoch and
+unmodified descriptor. Issuance/expiry stay in the original protected headers and
+use the same bounded credential lifetime. Policy rechecks its fenced epoch and
+member/credential revocations after the descriptor await before signing.
+
+`Revocations.passkeys` adds exact original community-scoped credential IDs to the
+existing indexed revocation store and Policy epoch transaction. IDs are1..1024
+bytes; no credential activity history is stored. Legacy persisted state predates
+this issuance purpose and defaults its absent set to empty. New signed snapshots
+always carry the explicit set; client Charter refuses passkey authority from an
+older publication without it. G3 must still verify original WebAuthn assertion,
+exact Keys challenge, current session/device authority and lineage commit rules.

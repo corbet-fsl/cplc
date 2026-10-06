@@ -122,3 +122,48 @@ signed lifetime remain current; `refresh_trust(now)` explicitly republishes all
 five original documents and the manifest. `trust_changes(revision, now)` returns
 a whole-view hint. Durable signing and counter ownership remain here. Global
 policy can implement the same LGPL Publisher port without depending on cplc.
+
+## Balance publication composition
+
+The community host obtains `balance_version(now)` under the same serialized
+configuration operation, asks its one configured AccountService for
+`public_verifier_material(version.revision, version.epoch)`, and submits that
+canonical type to `publish_balance(material, now)`. Policy validates the owner
+semantics and exact community/counters, uses its existing persistent signer and
+publication lifetime (also capped by the material's policy expiry), commits
+the original COSE bytes through the same Policy CAS, and only then returns them.
+There is no second signer or ledger, and no member-facing material submission.
+
+`balance_publication(now)` is absent only before accounting is configured.
+Epoch changes clear bytes but preserve its required revision; stale, expired or
+unacknowledged material refuses the whole refresh until the host reprojects it.
+The manifest's optional `balance_revision` makes the extra kind mandatory when
+configured. Beacon transports the original canonical document, independently
+of the Rulebook settings field. Consumers still validate accounting semantics
+with the owner after Charter authentication. This does not prove a member's
+latest account frontier or settlement privacy.
+
+Passkey lineage material reuses the original portable `ckyh::lineage::PublicCredential`
+and durable csgn Credential signing. The maintained Keyhole verifier retains
+WebAuthn parsing and signature verification; Policy adds only its existing
+member/epoch/lifetime binding under the original membership lease. No second
+passkey parser, primitive, key store or authorization database is introduced.
+
+## Common root-board public descriptor
+
+The configured owner calls `publish_root_board(&descriptor, now)` with the
+original CPSD `RootBoardPublicKey`. Policy checks its canonical codec, community,
+effective epoch and current fixed 30-day cohort before signing and committing.
+The first publication durably binds `descriptor.issuer().to_bytes()`; later
+publications preserve that issuer and cannot lower the cohort floor. Same-cohort
+refreshes advance the publication revision. Signing-key rotation uses the existing
+csgn continuity path and does not rotate the BBS issuer.
+
+`root_board_publication(now)` is absent only before configuration. Epoch changes
+invalidate its COSE bytes while retaining the issuer, cohort floor and revision;
+the owner must publish a current descriptor before refreshing the complete feed.
+The signed lifetime is capped by both Policy validity and descriptor expiry.
+The optional feed `root_board` and signed manifest `root_board_revision` carry
+this public material through Beacon and Charter. Consumers still decode with
+CPSD and check scope, epoch and lifetime against a current authenticated view.
+Publication supplies no role, nonce-consumption, credential or private-key authority.

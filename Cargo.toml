@@ -5,26 +5,31 @@ edition = "2024"
 rust-version = "1.88"
 description = "Policy facade of cvld: rulebook, profile schema and signing"
 license = "FSL-1.1-ALv2"
-repository = "https://github.com/corbet-libs/cplc"
+repository = "https://git.corbet.ch/corbet-libs/cplc.git"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
 
 [dependencies]
-cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main" }
-cpsd = { git = "https://github.com/corbet-foss/cpsd", branch = "main" }
-cgts = { git = "https://github.com/corbet-libs/cgts", branch = "main" }
-crbk = { git = "https://github.com/corbet-foss/crbk", branch = "main" }
-crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", features = ["libsql"] }
-cshm = { git = "https://github.com/corbet-foss/cshm", branch = "main" }
+ckyh = { git = "https://git.corbet.ch/corbet-foss/ckyh.git", branch = "v01", default-features = false, features = ["certificate-signing"] }
+data-encoding = "2.9"
+cblc = { git = "https://git.corbet.ch/corbet-libs/cblc.git", branch = "v01", features = ["publication"] }
+cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn.git", branch = "v01" }
+cpsd = { git = "https://git.corbet.ch/corbet-foss/cpsd.git", branch = "v01" }
+cgts = { git = "https://git.corbet.ch/corbet-libs/cgts.git", branch = "v01" }
+crbk = { git = "https://git.corbet.ch/corbet-foss/crbk.git", branch = "v01" }
+crlt = { git = "https://git.corbet.ch/corbet-foss/crlt.git", branch = "v01" }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn.git", branch = "v01", features = ["libsql"] }
+cshm = { git = "https://git.corbet.ch/corbet-foss/cshm.git", branch = "v01" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+cchr = { git = "https://git.corbet.ch/corbet-foss/cchr.git", branch = "v01" }
+sha2 = "0.11"
 libsql = { version = "0.9", default-features = false, features = ["core"] }
-clbs = { git = "https://github.com/corbet-foss/clbs", branch = "main" }
+clbs = { git = "https://git.corbet.ch/corbet-foss/clbs.git", branch = "v01" }
 rand = "0.8"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }

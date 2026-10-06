@@ -48,6 +48,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             communities: BTreeSet::new(),
             revocations: Revocations::default(),
             publications: BTreeMap::new(),
+            balance: None,
+            root_board: None,
+            root_board_issuer: None,
+            root_board_cohort: None,
             key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
@@ -132,7 +136,12 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let latest = self.rules.load(&next.community, Selection::Latest).await?;
         next.epoch = next_counter(next.epoch)?;
         effective_epoch(next.epoch, latest.map_or(0, |r| r.change.policy_epoch))?;
-        for publication in next.publications.values_mut() {
+        for publication in next
+            .publications
+            .values_mut()
+            .chain(next.balance.iter_mut())
+            .chain(next.root_board.iter_mut())
+        {
             publication.cose = None;
         }
         Ok(())
@@ -322,6 +331,13 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         for member in &revocations.members {
             identifier(member)?;
         }
+        if revocations
+            .passkeys
+            .iter()
+            .any(|id| id.is_empty() || id.len() > 1024)
+        {
+            return Err(Error::Invalid("passkey credential ID"));
+        }
         next.revocations = revocations;
         self.advance_epoch(&mut next).await?;
         self.commit(next).await
@@ -412,6 +428,14 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             policy_epoch: effective_epoch(state.epoch, active.change.policy_epoch)?,
             key_ring: self.key_ring()?.to_cbor(),
             schema_version: state.schema.as_ref().ok_or(Error::Missing)?.version,
+            root_board_revision: state
+                .root_board
+                .as_ref()
+                .map(|publication| publication.revision),
+            balance_revision: state
+                .balance
+                .as_ref()
+                .map(|publication| publication.revision),
         };
         let until = self
             .validity_limit(now, state.config.snapshot_validity, &active)
@@ -469,6 +493,81 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             .map_err(Error::from)
     }
 
+    /// Sign the retained root context after the service's own authorization.
+    /// This authenticates bytes; it does not grant a role or consume a nonce.
+    pub async fn sign_root_board_issuance_context(
+        &mut self,
+        context: &cpsd::RootBoardIssuanceContext,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let payload = context.to_bytes();
+        let decoded = cpsd::RootBoardIssuanceContext::from_bytes(&payload)
+            .map_err(|_| Error::Verification)?;
+        if decoded != *context || decoded.to_bytes() != payload {
+            return Err(Error::Verification);
+        }
+        let until = self
+            .root_board_signing_deadline(context.root(), context.deadline(), now)
+            .await?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Sign the service's retained joint root presentation request.
+    /// Nonce storage and admission remain the owning service's responsibilities.
+    pub async fn sign_root_board_request(
+        &mut self,
+        request: &cpsd::RootBoardRequest,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let payload = request.to_bytes();
+        let decoded =
+            cpsd::RootBoardRequest::from_bytes(&payload).map_err(|_| Error::Verification)?;
+        if decoded != *request || decoded.to_bytes() != payload {
+            return Err(Error::Verification);
+        }
+        let until = self
+            .root_board_signing_deadline(request.root(), request.deadline(), now)
+            .await?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    async fn root_board_signing_deadline(
+        &self,
+        descriptor: &cpsd::RootBoardPublicKey,
+        deadline: u64,
+        now: u64,
+    ) -> Result<u64> {
+        let limit = now
+            .checked_add(300)
+            .ok_or(Error::Invalid("time overflow"))?;
+        let until = deadline
+            .checked_add(1)
+            .ok_or(Error::Invalid("time overflow"))?;
+        if deadline < now || deadline > limit {
+            return Err(Error::Invalid("root-board request deadline"));
+        }
+        let cose = self
+            .root_board_publication(now)
+            .await?
+            .ok_or(Error::Missing)?;
+        let signed = self
+            .key_ring()?
+            .verify(&cose, csgn::Kind::SettingsSnapshot, now)
+            .map_err(|_| Error::Verification)?;
+        let payload: cbcn::root_board::Payload =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        if payload.descriptor != descriptor.to_bytes() || until > signed.valid_until() {
+            return Err(Error::Verification);
+        }
+        Ok(until)
+    }
+
     /// Sole admission decision over verified settings and bound gate receipts.
     /// The source of membership state is cmbr; cmty only wires these capabilities.
     pub async fn may(
@@ -495,6 +594,179 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         Ok(snapshot
             .settings()
             .may(subject, action, &gates, timestamp(now)?)?)
+    }
+
+    /// Version supplied to the configured AccountService's canonical producer.
+    /// Serialize projection and publication with community configuration changes.
+    pub async fn balance_version(&self, now: u64) -> Result<cbcn::document::Version> {
+        let state = self.current().await?;
+        Ok(cbcn::document::Version {
+            revision: next_counter(state.balance.as_ref().map_or(0, |p| p.revision))?,
+            epoch: self.epoch(now).await?,
+        })
+    }
+
+    /// Publish the actual Balance owner's document through this durable signer.
+    /// No member request may supply this host-only configuration operation.
+    pub async fn publish_balance(
+        &mut self,
+        material: cblc::publication::PublicVerifierMaterial,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let version = self.balance_version(now).await?;
+        let mut next = self.current().await?.clone();
+        if material.revision != version.revision || material.policy_epoch != version.epoch {
+            return Err(Error::Verification);
+        }
+        material
+            .validate_at(&next.community, now)
+            .map_err(|_| Error::Verification)?;
+        let payload = serde_json::to_vec(&material).map_err(|_| Error::Corrupt)?;
+        let active = self.active(now).await?;
+        let until = self
+            .validity_limit(now, next.config.snapshot_validity, &active)
+            .await?
+            .min(material.policy.account.policy_valid_until);
+        let cose = self
+            .signer
+            .sign(
+                csgn::Kind::SettingsSnapshot,
+                &payload,
+                crate::day(now),
+                until,
+            )
+            .await?;
+        next.balance = Some(Publication {
+            revision: version.revision,
+            cose: Some(cose.clone()),
+        });
+        self.commit(next).await?;
+        Ok(cose)
+    }
+
+    /// Original Balance bytes, or absence only if accounting was never configured.
+    /// An invalidated or expired document requires a fresh owner projection.
+    pub async fn balance_publication(&self, now: u64) -> Result<Option<Vec<u8>>> {
+        let state = self.current().await?;
+        let Some(publication) = &state.balance else {
+            return Ok(None);
+        };
+        let cose = publication.cose.as_ref().ok_or(Error::Missing)?;
+        let ring = self.key_ring()?;
+        cbcn::balance::Balance::verify(
+            ring,
+            cose,
+            self.epoch(now).await?,
+            publication.revision,
+            now,
+        )
+        .map_err(|_| Error::Verification)?;
+        let signed = ring
+            .verify(cose, csgn::Kind::SettingsSnapshot, now)
+            .map_err(|_| Error::Verification)?;
+        let material: cblc::publication::PublicVerifierMaterial =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        material
+            .validate_at(&state.community, now)
+            .map_err(|_| Error::Verification)?;
+        Ok(Some(cose.clone()))
+    }
+
+    /// Publish the configured common PUBLIC descriptor. This privileged operation
+    /// supplies no role, member, nonce or private-key authority. The BBS issuer is
+    /// bound once; subsequent publications may refresh its current cohort only.
+    pub async fn publish_root_board(
+        &mut self,
+        descriptor: &cpsd::RootBoardPublicKey,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        let mut next = self.current().await?.clone();
+        let epoch = self.epoch(now).await?;
+        let bytes = validate_root_board(descriptor, &next, epoch, now)?;
+        let revision = next_counter(next.root_board.as_ref().map_or(0, |p| p.revision))?;
+        let payload = cbcn::root_board::Payload {
+            purpose: cbcn::root_board::PURPOSE.into(),
+            community: next.community.clone(),
+            revision,
+            policy_epoch: epoch,
+            descriptor: bytes,
+        };
+        let payload = serde_json::to_vec(&payload).map_err(|_| Error::Corrupt)?;
+        if payload.len() > MAX_DOCUMENT_BYTES {
+            return Err(Error::Invalid("root-board size"));
+        }
+        let active = self.active(now).await?;
+        let until = self
+            .validity_limit(now, next.config.snapshot_validity, &active)
+            .await?
+            .min(descriptor.expires_at());
+        let cose = self
+            .signer
+            .sign(
+                csgn::Kind::SettingsSnapshot,
+                &payload,
+                crate::day(now),
+                until,
+            )
+            .await?;
+        next.root_board = Some(Publication {
+            revision,
+            cose: Some(cose.clone()),
+        });
+        next.root_board_issuer = Some(descriptor.issuer().to_bytes());
+        next.root_board_cohort = Some(descriptor.cohort_start());
+        self.commit(next).await?;
+        Ok(cose)
+    }
+
+    /// Original public descriptor bytes. Absence means never configured;
+    /// invalidation or expiry requires a fresh projection by the configured owner.
+    pub async fn root_board_publication(&self, now: u64) -> Result<Option<Vec<u8>>> {
+        Ok(self.current_root_board(now).await?.map(|(cose, _, _)| cose))
+    }
+
+    /// Decode only the current authenticated root descriptor and its exclusive
+    /// publication expiry. Consumers must re-read after policy changes; absence
+    /// or invalidation cannot authorize ordinary-passport root admission.
+    pub async fn root_board_descriptor(
+        &self,
+        now: u64,
+    ) -> Result<Option<(cpsd::RootBoardPublicKey, u64)>> {
+        Ok(self
+            .current_root_board(now)
+            .await?
+            .map(|(_, descriptor, until)| (descriptor, until)))
+    }
+
+    async fn current_root_board(
+        &self,
+        now: u64,
+    ) -> Result<Option<(Vec<u8>, cpsd::RootBoardPublicKey, u64)>> {
+        let state = self.current().await?;
+        let Some(publication) = &state.root_board else {
+            return Ok(None);
+        };
+        let cose = publication.cose.as_ref().ok_or(Error::Missing)?;
+        let epoch = self.epoch(now).await?;
+        let material = cbcn::root_board::RootBoard::verify(
+            self.key_ring()?,
+            cose,
+            epoch,
+            publication.revision,
+            now,
+        )
+        .map_err(|_| Error::Verification)?;
+        let payload: cbcn::root_board::Payload =
+            serde_json::from_slice(material.payload()).map_err(|_| Error::Corrupt)?;
+        let descriptor = cpsd::RootBoardPublicKey::from_bytes(&payload.descriptor)
+            .map_err(|_| Error::Verification)?;
+        if validate_root_board(&descriptor, state, epoch, now)? != payload.descriptor
+            || state.root_board_cohort != Some(descriptor.cohort_start())
+            || material.valid_until() > descriptor.expires_at()
+        {
+            return Err(Error::Verification);
+        }
+        Ok(Some((cose.clone(), descriptor, material.valid_until())))
     }
 
     /// Sign and durably publish one current snapshot, returning its COSE bytes.
@@ -661,6 +933,115 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         request: CredentialRequest<'_>,
         now: u64,
     ) -> Result<Vec<u8>> {
+        let (credential, until, _lease) =
+            self.credential_candidate(membership, request, now).await?;
+        let payload = encode(&credential)?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    /// Issue Keyhole's original registered-key certificate using this one durable
+    /// signer and Beacon ring. This is not admission and does not advance policy
+    /// epochs or public activity revisions. The caller retains Membership's
+    /// certificate lease through this await and checks its deadline before return.
+    pub async fn issue_passkey_certificate(
+        &mut self,
+        registration: &ckyh::certificate::RegistrationCertificate,
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        self.key_ring()?;
+        let state = self.current().await?;
+        if registration.community() != self.key_ring()?.issuer() {
+            return Err(Error::Invalid("passkey certificate scope"));
+        }
+        if state.revocations.members.contains(registration.member())
+            || state
+                .revocations
+                .passkeys
+                .contains(registration.credential_id())
+        {
+            return Err(Error::Revoked);
+        }
+        // The public registration certificate retains coarse issuance, as do
+        // existing public Policy signatures. No login/activity timestamp persists.
+        let bytes = registration
+            .sign(&mut self.signer, crate::day(now))
+            .await
+            .map_err(|_| Error::Invalid("passkey certificate signing"))?;
+        self.key_ring()?
+            .verify(&bytes, csgn::Kind::Credential, now)
+            .map_err(|_| Error::Invalid("passkey certificate lifetime"))?;
+        Ok(bytes)
+    }
+
+    /// Sign original live Keyhole material under the same credential evaluation
+    /// and membership serialization lease. The request selects only a credential
+    /// ID, never a descriptor, member mapping, lifetime or authorization verdict.
+    pub async fn issue_passkey_binding<M: crate::PasskeySource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        credential_id: &[u8],
+        now: u64,
+    ) -> Result<Vec<u8>> {
+        if credential_id.is_empty() || credential_id.len() > 1024 {
+            return Err(Error::Invalid("passkey credential ID"));
+        }
+        let (candidate, until, lease) = self.credential_candidate(membership, request, now).await?;
+        let descriptor = membership
+            .passkey(&candidate.member, credential_id, &lease, now)
+            .await?;
+        if descriptor.community() != candidate.community
+            || descriptor.credential_id() != credential_id
+            || descriptor.spki().is_empty()
+            || descriptor.spki().len() > 8192
+            || descriptor.rp_id().is_empty()
+            || descriptor.rp_id().len() > 253
+            || descriptor.origins().is_empty()
+            || descriptor.origins().len() > 32
+            || descriptor
+                .origins()
+                .iter()
+                .any(|origin| origin.len() > 2048)
+        {
+            return Err(Error::Invalid("passkey binding scope"));
+        }
+        // Re-read the original fenced state after the owner await, while the
+        // same membership lease remains alive through durable signer completion.
+        if self.epoch(now).await? != candidate.policy_epoch {
+            return Err(Error::Conflict);
+        }
+        let state = self.current().await?;
+        if state.revocations.members.contains(&candidate.member)
+            || state.revocations.passkeys.contains(credential_id)
+        {
+            return Err(Error::Revoked);
+        }
+        let payload = encode(&crate::PasskeyBinding {
+            purpose: crate::PasskeyBindingPurpose::LineageV1,
+            community: candidate.community,
+            member: candidate.member,
+            policy_epoch: candidate.policy_epoch,
+            credential: descriptor,
+        })?;
+        let result = self
+            .signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await;
+        drop(lease);
+        result.map_err(Error::from)
+    }
+
+    // One evaluation and one live membership lease for either public projection.
+    // The lease is retained by the caller throughout persistent signing.
+    async fn credential_candidate<M: crate::MembershipSource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        now: u64,
+    ) -> Result<(Credential, u64, M::Lease)> {
         let state = self.current().await?.clone();
         self.validate_snapshot(request.snapshot, now).await?;
         let gates = request
@@ -681,7 +1062,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             request.pins,
             request.devices,
         )?;
-        let (facts, _membership_lease) = membership.membership(request.subject.id, now).await?;
+        let (facts, membership_lease) = membership.membership(request.subject.id, now).await?;
         validate_membership(&state.community, request.subject.id, &facts, now)?;
         if facts.authorized_devices.len() > MAX_ENTRIES
             || request
@@ -732,11 +1113,77 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             pins: request.pins.to_vec(),
             devices: request.devices.to_vec(),
         };
-        let payload = encode(&credential)?;
-        self.signer
-            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
-            .await
-            .map_err(Error::from)
+        Ok((credential, until, membership_lease))
+    }
+
+    /// Issue the v3 account grant from the same current admission decision as a
+    /// credential. Policy owns the signing key and projects the actual retained
+    /// Balance digest; the caller selects only one already-authorized device.
+    pub async fn issue_account_grant<M: crate::MembershipSource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        device: [u8; 32],
+        context: crate::AccountGrantContext,
+        now: u64,
+    ) -> Result<cblc::admission::AdmissionGrant> {
+        use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
+        if context.passport_policy_digest == [0; 32]
+            || context.passport_valid_until <= now
+            || context.passport_valid_until > i64::MAX as u64
+        {
+            return Err(Error::Invalid("account passport cohort"));
+        }
+        let (credential, until, _lease) =
+            self.credential_candidate(membership, request, now).await?;
+        if !credential.devices.contains(&device) {
+            return Err(Error::Invalid("unauthorized account device"));
+        }
+        let pseudonym: [u8; 48] = HEXLOWER
+            .decode(credential.member.as_bytes())
+            .map_err(|_| Error::Invalid("account pseudonym"))?
+            .try_into()
+            .map_err(|_| Error::Invalid("account pseudonym"))?;
+        let original = self.balance_publication(now).await?.ok_or(Error::Missing)?;
+        let signed = self
+            .key_ring()?
+            .verify(&original, csgn::Kind::SettingsSnapshot, now)
+            .map_err(|_| Error::Verification)?;
+        let material: cblc::publication::PublicVerifierMaterial =
+            serde_json::from_slice(signed.payload()).map_err(|_| Error::Corrupt)?;
+        let until = until
+            .min(context.passport_valid_until)
+            .min(signed.valid_until())
+            .min(material.policy.account.policy_valid_until);
+        if now >= until {
+            return Err(Error::Verification);
+        }
+        let key = self
+            .key_ring()?
+            .active()
+            .ok_or(Error::Corrupt)?
+            .public_key();
+        let mut grant = cblc::admission::AdmissionGrant {
+            version: 3,
+            issuer_key_id: cblc::admission::policy_key_id(&key),
+            community_id: credential.community,
+            member_id: cblc::admission::member_id(&pseudonym),
+            pseudonym: credential.member,
+            chat_public_key: B64.encode(&device),
+            policy_digest: B64.encode(&material.policy_digest),
+            policy_epoch: credential.policy_epoch,
+            passport_policy_digest: B64.encode(&context.passport_policy_digest),
+            issued_at: crate::day(now),
+            expires_at: until,
+            signature: String::new(),
+        };
+        let payload = cblc::admission::admission_bytes(&grant).map_err(|_| Error::Verification)?;
+        let signed = self
+            .signer
+            .sign(csgn::Kind::Credential, &payload, grant.issued_at, until)
+            .await?;
+        grant.signature = B64.encode(&signed);
+        Ok(grant)
     }
 
     /// Rotate using an already provisioned secret-store key. Old public keys are
@@ -975,3 +1422,33 @@ fn policy_deadline(
 #[cfg(test)]
 #[path = "../tests/unit/policy.rs"]
 mod tests;
+
+// Original CPSD owns codec, catalogue and fixed-cohort validation. The publication
+// owner binds its configured scope/epoch, current time and durable issuer/floor.
+fn validate_root_board(
+    descriptor: &cpsd::RootBoardPublicKey,
+    state: &StoredPolicy,
+    epoch: u64,
+    now: u64,
+) -> Result<Vec<u8>> {
+    timestamp(now)?;
+    let bytes = descriptor.to_bytes();
+    let decoded = cpsd::RootBoardPublicKey::from_bytes(&bytes).map_err(|_| Error::Verification)?;
+    if decoded != *descriptor
+        || decoded.to_bytes() != bytes
+        || descriptor.community().as_bytes() != state.community.as_bytes()
+        || descriptor.policy_epoch() != epoch
+        || now < descriptor.cohort_start()
+        || now >= descriptor.expires_at()
+        || state
+            .root_board_issuer
+            .as_ref()
+            .is_some_and(|issuer| *issuer != descriptor.issuer().to_bytes())
+        || state
+            .root_board_cohort
+            .is_some_and(|floor| descriptor.cohort_start() < floor)
+    {
+        return Err(Error::Verification);
+    }
+    Ok(bytes)
+}

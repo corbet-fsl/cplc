@@ -242,6 +242,7 @@ async fn real_sql_triggers_and_missing_revocation_storage_refuse_partial_writes(
                 .set_revocations(Revocations {
                     members: [MEMBER.into()].into(),
                     devices: Default::default(),
+                    passkeys: Default::default(),
                 })
                 .await
                 .unwrap();
@@ -350,4 +351,63 @@ async fn refreshed_connection_refuses_an_actual_unindexed_plan() {
         .check_query_plans()
         .await;
     assert!(matches!(result, Err(Error::Storage)), "{result:?}");
+}
+
+#[tokio::test]
+async fn passkey_revocations_use_original_indexed_store_epoch_and_publication() {
+    let (_directory, db, _rules, mut policy) = local().await;
+    let before = policy.epoch(NOW).await.unwrap();
+    let id = vec![9; 64];
+    policy
+        .set_revocations(Revocations {
+            passkeys: [id.clone()].into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(policy.epoch(NOW).await.unwrap() > before);
+    let original = policy
+        .publish(SnapshotKind::RevocationList, NOW)
+        .await
+        .unwrap();
+    let authenticated = policy
+        .key_ring()
+        .unwrap()
+        .verify(&original, csgn::Kind::RevocationListSnapshot, NOW)
+        .unwrap();
+    let snapshot: Snapshot<Revocations> = serde_json::from_slice(authenticated.payload()).unwrap();
+    assert!(snapshot.content.passkeys.contains(&id));
+    let store = LibsqlStore::new(&db, COMMUNITY).unwrap();
+    store.check_query_plans().await.unwrap();
+    let saved = serde_json::to_value(store.load().await.unwrap().unwrap()).unwrap();
+    assert_eq!(saved["revocations"]["passkeys"], json!([id]));
+    for invalid in [Vec::new(), vec![1; 1025]] {
+        assert!(
+            policy
+                .set_revocations(Revocations {
+                    passkeys: [invalid].into(),
+                    ..Default::default()
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            serde_json::to_value(store.load().await.unwrap().unwrap()).unwrap(),
+            saved
+        );
+    }
+    policy
+        .set_revocations(Revocations::default())
+        .await
+        .unwrap();
+    let cleared = serde_json::to_value(
+        LibsqlStore::new(&db, COMMUNITY)
+            .unwrap()
+            .load()
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cleared["revocations"]["passkeys"], json!([]));
 }
