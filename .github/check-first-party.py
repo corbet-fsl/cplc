@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-FIRST_PARTY = re.compile(r"^(?:git\+)?https://github\.com/corbet-(?:foss|libs)/")
+FIRST_PARTY = re.compile(r"^(?:git\+)?https://git\.corbet\.ch/corbet-(?:foss|libs)/")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -45,10 +45,10 @@ def check_manifest(value):
 
 
 def self_test():
-    source = 'git+https://github.com/corbet-foss/example?branch=main#' + 'a' * 40
+    source = 'git+https://git.corbet.ch/corbet-foss/example?branch=main#' + 'a' * 40
     package = {'name': 'example', 'source': source}
     check_packages([package])
-    check_manifest({'git': 'https://github.com/corbet-foss/example', 'branch': 'main'})
+    check_manifest({'git': 'https://git.corbet.ch/corbet-foss/example', 'branch': 'main'})
     for packages in [[package, package], [package, {'name': 'example'}],
                      [{'name': 'example', 'source': source.replace('main', 'next')}],
                      [{'name': 'example', 'source': source.replace('branch=main', 'rev=abc')}],
@@ -59,8 +59,8 @@ def self_test():
         except ValueError:
             continue
         raise AssertionError('Invalid dependency graph accepted')
-    for value in [{'git': 'https://github.com/corbet-foss/example', 'rev': 'a' * 40},
-                  {'git': 'https://github.com/corbet-foss/example', 'branch': 'main', 'tag': 'v1'}]:
+    for value in [{'git': 'https://git.corbet.ch/corbet-foss/example', 'rev': 'a' * 40},
+                  {'git': 'https://git.corbet.ch/corbet-foss/example', 'branch': 'main', 'tag': 'v1'}]:
         try:
             check_manifest(value)
         except ValueError:
