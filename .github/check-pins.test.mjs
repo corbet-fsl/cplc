@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkPins } from './check-pins.mjs';
-const source = 'git+https://github.com/corbet-foss/crlt?branch=main#' + 'a'.repeat(40);
+const source = 'git+https://git.corbet.ch/corbet-foss/crlt?branch=main#' + 'a'.repeat(40);
 const pkg = { name: 'crlt', source };
 test('accept main with one exact lock revision', () => checkPins({ packages: [pkg] }));
 test('reject duplicate versions and pinned or unqualified sources', () => {

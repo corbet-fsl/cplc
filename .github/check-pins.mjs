@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-const firstParty = /^git\+https:\/\/github\.com\/corbet-(?:foss|libs)\//;
+const firstParty = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:foss|libs)\//;
 export function checkPins(metadata) {
   const names = new Set();
   const check = (source, resolved) => {
