@@ -2,29 +2,29 @@
 name = "cplc"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.95"
 description = "Policy facade of cvld: rulebook, profile schema and signing"
 license = "FSL-1.1-ALv2"
-repository = "https://github.com/corbet-libs/cplc"
+repository = "https://git.corbet.ch/corbet-libs/cplc"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
 
 [dependencies]
-cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main" }
-cpsd = { git = "https://github.com/corbet-foss/cpsd", branch = "main" }
-cgts = { git = "https://github.com/corbet-libs/cgts", branch = "main" }
-crbk = { git = "https://github.com/corbet-foss/crbk", branch = "main" }
-crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", features = ["libsql"] }
-cshm = { git = "https://github.com/corbet-foss/cshm", branch = "main" }
+cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main" }
+cpsd = { git = "https://git.corbet.ch/corbet-foss/cpsd", branch = "main" }
+cgts = { git = "https://git.corbet.ch/corbet-libs/cgts", branch = "main" }
+crbk = { git = "https://git.corbet.ch/corbet-foss/crbk", branch = "main" }
+crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", features = ["libsql"] }
+cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
 libsql = { version = "0.9", default-features = false, features = ["core"] }
-clbs = { git = "https://github.com/corbet-foss/clbs", branch = "main" }
+clbs = { git = "https://git.corbet.ch/corbet-foss/clbs", branch = "main" }
 rand = "0.8"
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
