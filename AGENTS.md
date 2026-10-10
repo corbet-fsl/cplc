@@ -14,10 +14,10 @@ Write all code comments and documentation in English.
 ## Quality boundary
 
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` must pass.
-- Do not run Cargo on the workstation, including formatting or metadata. Push and let GitHub Actions run; read results with `gh run list` / `gh run view --log-failed`.
+- Do not run Cargo on the workstation, including formatting or metadata. Push to Forgejo and validate committed source with Crow repository jobs; read results with `ci-job status` / `ci-job logs`.
 - Tests: real round trips with libSQL (local file or in-memory), no mocks of our own logic; ample edge cases.
 - Commits: plain English, imperative; no AI attribution. Never publish to a registry.
 
 - First-party Git dependencies follow branch main; resolve one full locked revision per crate.
-- Dependabot merge requires protected exact-head substantive CI and full line/branch coverage.
+- Dependency updates require protected exact-candidate substantive CI and full line/branch coverage.
 - Stage explicit paths, pull with rebase before pushing, and never force-push.
