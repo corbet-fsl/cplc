@@ -152,6 +152,24 @@ async fn actual_memory_store_refuses_nonmonotonic_transition_metadata() {
 }
 
 #[tokio::test]
+async fn original_stored_passkey_revocations_refuse_empty_and_oversized_ids() {
+    let (store, old) = baseline().await;
+    for id in [Vec::new(), vec![41u8; 1025]] {
+        let mut next = serde_json::to_value(&old).unwrap();
+        next["revision"] = json!(old.revision() + 1);
+        next["revocations"]["passkeys"] = json!([id]);
+        let next: StoredPolicy = serde_json::from_value(next).unwrap();
+        assert!(
+            store
+                .compare_exchange(Some(old.revision()), &next)
+                .await
+                .is_err()
+        );
+        assert_eq!(store.load().await.unwrap().as_ref(), Some(&old));
+    }
+}
+
+#[tokio::test]
 async fn actual_sql_decoder_rejects_bad_scope_revision_and_revocation_rows() {
     for case in 0..6 {
         let (_dir, db, _, _policy) = local().await;
@@ -242,6 +260,7 @@ async fn real_sql_triggers_and_missing_revocation_storage_refuse_partial_writes(
                 .set_revocations(Revocations {
                     members: [MEMBER.into()].into(),
                     devices: Default::default(),
+                    passkeys: Default::default(),
                 })
                 .await
                 .unwrap();

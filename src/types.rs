@@ -92,6 +92,10 @@ pub struct Revocations {
     pub members: BTreeSet<String>,
     /// Revoked public device keys.
     pub devices: BTreeSet<[u8; 32]>,
+    /// Revoked original community-scoped passkey credential IDs. Older stored
+    /// state predates certificate issuance; newly signed snapshots emit this set.
+    #[serde(default)]
+    pub passkeys: BTreeSet<Vec<u8>>,
 }
 
 /// Current membership facts read by the owning membership facade.

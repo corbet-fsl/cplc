@@ -73,6 +73,14 @@ impl StoredPolicy {
         for id in self.communities.iter().chain(&self.revocations.members) {
             identifier(id)?;
         }
+        if self
+            .revocations
+            .passkeys
+            .iter()
+            .any(|id| id.is_empty() || id.len() > 1024)
+        {
+            return Err(Error::Corrupt);
+        }
         if let Some(schema) = &self.schema {
             if schema.community != self.community
                 || schema.public.len() + schema.private.len() > MAX_ENTRIES

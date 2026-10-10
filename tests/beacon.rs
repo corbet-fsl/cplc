@@ -33,6 +33,7 @@ async fn beacon_preserves_current_bytes_and_refreshes_real_policy_changes() {
         .set_revocations(Revocations {
             members: [MEMBER.into()].into(),
             devices: [DEVICE].into(),
+            passkeys: Default::default(),
         })
         .await
         .unwrap();

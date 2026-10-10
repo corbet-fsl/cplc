@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+mod certificate;
+
 use crbk::{GateLevel, Selection};
 use serde::Serialize;
 
@@ -321,6 +323,13 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let mut next = self.current().await?.clone();
         for member in &revocations.members {
             identifier(member)?;
+        }
+        if revocations
+            .passkeys
+            .iter()
+            .any(|id| id.is_empty() || id.len() > 1024)
+        {
+            return Err(Error::Invalid("passkey credential ID"));
         }
         next.revocations = revocations;
         self.advance_epoch(&mut next).await?;
