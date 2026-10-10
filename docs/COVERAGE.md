@@ -7,10 +7,10 @@ with a complete matching LLVM JSON file inventory and no absent measurements. Fo
 they are validation inputs rather than shipped behavior. A failed gate is an
 open test gap, never evidence of complete coverage.
 
-Dependencies are resolved once per CI run and the resulting Cargo.lock artifact
-is reused by every job. CI refreshes within the declared ranges;
-Dependabot proposes lockfile updates for review and merging after full CI.
-The checked-in lock and per-run artifacts retain exact reproducible resolutions.
+Dependency refreshes resolve within the declared ranges and retain the resulting
+Cargo.lock snapshot. Final verification uses the committed lockfile without
+resolving a different graph. Dependabot proposes lockfile updates for review and
+merging after full CI; the checked-in lock records the exact tested resolution.
 
 The source gate reuses the shared policy-track LCOV/JSON inventory validator.
 LCOV, JSON and annotated text come from the same instrumented execution.

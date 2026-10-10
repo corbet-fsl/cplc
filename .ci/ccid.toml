@@ -19,3 +19,16 @@ scheduler = "crow"
 checks = ["verify", "advisories"]
 workflow = "repository-jobs"
 command = ["bash", ".ci/run-cached.sh"]
+
+# Resolve once on Crow, then review and retain the lock before full verification.
+[checks.resolve-dependencies]
+kind = "commands"
+commands = [["bash", ".ci/resolve-dependencies.sh"]]
+cache = false
+cache_outputs = ["Cargo.lock", "dependency-metadata.json"]
+
+[jobs.resolve-dependencies]
+scheduler = "crow"
+checks = ["resolve-dependencies"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
