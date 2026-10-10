@@ -4,9 +4,6 @@ exec 2>&1
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-never}"
 
-cargo update
-cp Cargo.lock "$ARTIFACT_ROOT/Cargo.lock"
-
 cargo metadata --locked --format-version 1 > dependency-metadata.json
 python3 .github/test-check-source-coverage.py
 

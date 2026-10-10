@@ -44,11 +44,11 @@ def check_manifest(value):
             check_manifest(item)
 
 
-def self_test():
-    source = 'git+https://github.com/corbet-foss/example?branch=main#' + 'a' * 40
+def check_host_fixtures(host):
+    source = f'git+https://{host}/corbet-foss/example?branch=main#' + 'a' * 40
     package = {'name': 'example', 'source': source}
     check_packages([package])
-    check_manifest({'git': 'https://github.com/corbet-foss/example', 'branch': 'main'})
+    check_manifest({'git': f'https://{host}/corbet-foss/example', 'branch': 'main'})
     for packages in [[package, package], [package, {'name': 'example'}],
                      [{'name': 'example', 'source': source.replace('main', 'next')}],
                      [{'name': 'example', 'source': source.replace('branch=main', 'rev=abc')}],
@@ -59,13 +59,18 @@ def self_test():
         except ValueError:
             continue
         raise AssertionError('Invalid dependency graph accepted')
-    for value in [{'git': 'https://github.com/corbet-foss/example', 'rev': 'a' * 40},
-                  {'git': 'https://github.com/corbet-foss/example', 'branch': 'main', 'tag': 'v1'}]:
+    for value in [{'git': f'https://{host}/corbet-foss/example', 'rev': 'a' * 40},
+                  {'git': f'https://{host}/corbet-foss/example', 'branch': 'main', 'tag': 'v1'}]:
         try:
             check_manifest(value)
         except ValueError:
             continue
         raise AssertionError('Invalid manifest accepted')
+
+
+def self_test():
+    for host in ['github.com', 'git.corbet.ch']:
+        check_host_fixtures(host)
 
 
 if __name__ == '__main__':
