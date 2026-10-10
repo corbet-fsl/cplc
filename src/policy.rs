@@ -840,7 +840,7 @@ fn validate_request(
                 GateLevel::Community => gate.community.as_deref() != Some(&state.community),
                 GateLevel::Global => gate.community.is_some(),
             }
-            || !gate_ids.insert((gate.level, &gate.gate))
+            || !gate_ids.insert((gate.level, &gate.gate, &gate.provider))
         {
             return Err(Error::Invalid("gate binding or duplicate"));
         }

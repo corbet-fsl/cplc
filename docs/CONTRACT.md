@@ -84,7 +84,7 @@ They are also shortened to csgn's lifetime limit, proof expiry and the next
 announced policy activation. Maximum-proof-age expiry is determined by asking
 crbk at future times within this fixed policy interval, not by another policy
 engine. Every included gate covers the entire signed lifetime. Subject/scope
-mismatches, duplicate community gates, revoked members/devices, invalid pins,
+mismatches, duplicate gate/level/provider facts, revoked members/devices, invalid pins,
 missing schema, wrong schema version and any membership other than Admitted fail closed, even
 when the action has no membership requirement. Credential Debug output is redacted.
 Community signer namespaces contain only ASCII letters, digits, dot, dash and

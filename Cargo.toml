@@ -23,6 +23,8 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+cvch = { git = "https://git.corbet.ch/corbet-foss/cvch", branch = "main" }
+ed25519-dalek = "3"
 libsql = { version = "0.9", default-features = false, features = ["core"] }
 clbs = { git = "https://git.corbet.ch/corbet-foss/clbs", branch = "main" }
 rand = "0.8"

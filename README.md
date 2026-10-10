@@ -38,7 +38,7 @@ keeps a credential/member activity history, or receives pin values/salts.
 
 ## Dependency survey
 
-Checked crates.io metadata and public GitHub main APIs on 2026-09-30, including
+Checked crates.io metadata and public upstream main metadata on 2026-09-30, including
 each selected leaf's README and implemented contract:
 
 | Candidate | Decision and reason |
@@ -78,7 +78,7 @@ the service/consumers. The [contract](docs/CONTRACT.md) details failure recovery
 
 ## Validation
 
-All Cargo commands run on GitHub Actions with current stable Rust:
+All Cargo commands run in CI with current stable Rust:
 `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`,
 `cargo test`. CI retains its resolved dependency lock as an artifact.
 No Cargo command runs on the workstation.
@@ -106,10 +106,9 @@ share the existing document and entry bounds; they contain no member values.
 
 First-party dependencies follow `main`; Cargo.lock records one exact revision
 per crate. CI checks the entire resolved graph, including optional declarations.
-Dependabot covers Cargo and GitHub Actions (there is no npm manifest here).
-The merge workflow uses GitHub metadata only and requires every substantive CI
-job and all published checks to succeed on the exact Dependabot head. It never
-executes PR code with write permissions or bypasses branch protection.
+Dependency updates must pass every substantive CI job and published check on
+the exact candidate revision before merging. Update automation must never
+execute candidate code with write permissions or bypass branch protection.
 
 [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) supplies LLVM line and
 branch measurements; the strict gate and exclusions are in [COVERAGE.md](docs/COVERAGE.md).

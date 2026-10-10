@@ -10,11 +10,13 @@ export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-never}"
 
 cargo metadata --locked --format-version 1 > dependency-metadata.json
 python3 .github/test-check-source-coverage.py
+python3 .ci/test-provider-controls.py
 
 rustc --version
 cargo fmt --all --check
 python3 .github/check-first-party.py
 cargo clippy --locked --all-targets -- -D warnings
+python3 .ci/provider-controls.py
 cargo test --locked --no-fail-fast
 
 rustup run nightly rustc --version
