@@ -28,6 +28,10 @@ pub struct StoredPolicy {
     pub(crate) community: String,
     pub(crate) revision: u64,
     pub(crate) epoch: u64,
+    // Only persisted pre-v2 state may omit this field. Signed credentials have
+    // no legacy/defaulted version or action binding.
+    #[serde(default)]
+    pub(crate) credential_format: Option<crate::CredentialPurpose>,
     pub(crate) config: Config,
     pub(crate) schema: Option<cshm::Schema>,
     #[serde(default)]
@@ -176,6 +180,13 @@ pub(crate) fn validate_transition(
         if next.epoch < previous.epoch
             || next.config != previous.config
             || !next.key_transitions.starts_with(&previous.key_transitions)
+        {
+            return Err(Error::Corrupt);
+        }
+        if next.credential_format != previous.credential_format
+            && (previous.credential_format.is_some()
+                || next.epoch <= previous.epoch
+                || next.publications.values().any(|p| p.cose.is_some()))
         {
             return Err(Error::Corrupt);
         }

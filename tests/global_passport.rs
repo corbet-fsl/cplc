@@ -134,6 +134,9 @@ async fn verified_global_metadata_is_decided_but_not_disclosed() {
         .unwrap();
     let payload = std::str::from_utf8(verified.payload()).unwrap();
     let credential: Credential = serde_json::from_slice(verified.payload()).unwrap();
+    assert_eq!(credential.purpose, CredentialPurpose::CommunityAdmission);
+    assert_eq!(credential.issuance_action, config().credential_action);
+    assert_eq!(credential.policy_epoch, policy.epoch(NOW).await.unwrap());
     assert!(credential.gates.is_empty());
     assert!(!payload.contains("phone"));
     assert!(!payload.contains("proven_at"));

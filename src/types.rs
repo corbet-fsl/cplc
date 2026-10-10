@@ -154,10 +154,22 @@ pub struct CredentialGate {
     pub valid_until: u64,
 }
 
+/// The versioned issuer admission assertion, distinct from a passkey certificate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CredentialPurpose {
+    /// The issuer evaluated its configured action with the complete real evidence.
+    #[serde(rename = "cplc.community-credential.v2")]
+    CommunityAdmission,
+}
+
 /// Credential payload; never stored by cplc. COSE binds issuance, expiry and key.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Credential {
+    /// Required version; older unbound credentials cannot assert this decision.
+    pub purpose: CredentialPurpose,
+    /// Actual persisted issuer action, never selected by the issuance request.
+    pub issuance_action: String,
     /// Community namespace.
     pub community: String,
     /// Community pseudonym, never a global identity.

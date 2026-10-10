@@ -44,6 +44,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             community: store.community().into(),
             revision: 1,
             epoch: 1,
+            credential_format: Some(crate::CredentialPurpose::CommunityAdmission),
             config,
             schema: None,
             schema_versions: Vec::new(),
@@ -72,6 +73,17 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             return Err(Error::Corrupt);
         }
         let expected = state.revision;
+        if state.credential_format.is_none() {
+            // Upgrade the authenticated meaning once, in the original policy
+            // CAS. Old writers conflict and old epochs require real renewal.
+            state.epoch = next_counter(state.epoch)?;
+            let latest = rules.load(&state.community, Selection::Latest).await?;
+            effective_epoch(state.epoch, latest.map_or(0, |r| r.change.policy_epoch))?;
+            state.credential_format = Some(crate::CredentialPurpose::CommunityAdmission);
+            for publication in state.publications.values_mut() {
+                publication.cose = None;
+            }
+        }
         state.revision = next_counter(expected)?;
         store.compare_exchange(Some(expected), &state).await?;
         let mut policy = Self {
@@ -732,6 +744,8 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         until = bounded_until;
         until = policy_deadline(now, until, decide)?;
         let credential = Credential {
+            purpose: crate::CredentialPurpose::CommunityAdmission,
+            issuance_action: state.config.credential_action,
             community: state.community,
             member: request.subject.id.into(),
             handle: request.handle.into(),

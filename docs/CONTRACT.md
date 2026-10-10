@@ -9,7 +9,7 @@ remain separate. Rust on current stable; FSL-1.1-ALv2; no registry publication.
 No own cryptographic primitives. No login dates, request logs or raw gate data.
 Use maintained leaves on main with one exact locked revision each. Storage goes through `crlt`, with one
 database per community, a community key in every table and indexed queries.
-Tests exercise real leaf operations and real local libSQL on GitHub Actions.
+Tests exercise real leaf operations and real local libSQL.
 
 ## Composition and trust boundary
 
@@ -65,12 +65,30 @@ Only the latest signed bytes of each kind are retained; policy edits clear cache
 bytes while preserving revision counters. Snapshot lifetime is bounded by config,
 csgn's maximum and the next scheduled rulebook activation.
 
-Credentials carry community, member pseudonym, canonical handle, community gates
+Credentials require the purpose `cplc.community-credential.v2` and the exact
+`issuance_action` selected by the persisted issuer configuration. The signature
+attests that the complete configured action passed the real issuance evaluation;
+the member cannot select that action or supply a verdict. A consumer must require
+its own expected issuance action and current authenticated epoch. It must not
+reconstruct the issuer decision from the deliberately incomplete disclosed gates.
+Missing or unknown purposes and missing actions have no legacy/default acceptance.
+
+Credentials also carry community, member pseudonym, canonical handle, community gates
 with expiries, pin fingerprints, authorized device keys, schema version and epoch.
 The enclosing COSE supplies issuance, expiry and key ID. Global proof metadata
 participates in the decision but is never copied into the credential or storage.
 Credential issuance stores no credential, pseudonym, proof or login history.
 Current revocations are explicit policy state, not an activity log.
+
+New policy scopes begin with the v2 format marker. Opening an older policy state
+without that private marker upgrades it in the original revision-checked atomic
+write: advance the facade epoch once and invalidate cached signed publications,
+retaining all publication counters. Compatible consumers and a genuine credential
+renewal are required. Reopening upgraded state does not advance the epoch again.
+Unknown future markers, format downgrades, exhausted counters, and transitions
+that retain the old epoch or cached publications refuse. Failed writes return no
+usable policy; reopen the actual store to determine whether the migration committed.
+This is a policy-document migration; it adds no member record or database schema.
 
 The membership source is selected by the service composition root, and reads
 current state, probation and lease from cmbr. Callers cannot select a lifetime
@@ -131,11 +149,14 @@ transitive ones. First-party declarations follow main; every tested graph retain
 one exact locked revision per crate.
 
 cchr retains the original complete settings and separate revocation signatures.
-Its borrowed admission adapter passes those bytes to cgrd, which verifies them
-and delegates all/any/k-of-n semantics to crbk. Actual door-authorized bundles
-exercise this path natively and on wasm in Charter and Assurance CI. No lossy
-translation or silent empty-gate fallback is provided. Production forum wiring
-remains downstream. Emergency signing-key revocation and rollback-proof
+Its borrowed admission adapter passes those bytes to cgrd. The v2 consumer
+requires the explicitly expected signed issuance action, while retaining original
+credential, epoch, revocation, device, profile and pin verification. All/any/k-of-n
+semantics remain at the issuer's actual crbk evaluation; global facts are neither
+copied out nor replaced by synthetic passing facts at the consumer. Adoption and
+execution of this versioned graph must be qualified together; earlier v1 test
+results do not qualify it. Production forum wiring remains downstream and still
+requires its independent accounting-currentness proof. Emergency signing-key revocation and rollback-proof
 recovery remain csgn/service boundaries. The development test gate is test-only;
 there are no provider calls or production test-gate features.
 
