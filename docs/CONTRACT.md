@@ -276,3 +276,12 @@ silently dropped. A proof that exceeds the remaining byte budget remains durable
 and pending in csgn, and the writer refuses publication until operator recovery.
 That exceptional history-budget condition needs deployment reprovisioning; the
 facade does not invent a root reset. No private key enters Policy storage.
+
+
+Time inputs in this host facade describe an explicit as-of evaluation. They are
+bound into the checked policy context; they are not a live-clock implementation.
+A successful result at that instant does not authorize a later action after its
+validity ends. The hosting service owns the final authorization boundary: use its
+trusted current clock, check result expiry and current policy/legal state, and
+re-evaluate when the earlier context is no longer current. Passing an old `now`
+through delayed storage work does not establish completion-time freshness.

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 exec 2>&1
+: "${ARTIFACT_ROOT:?verify requires an absolute ARTIFACT_ROOT}"
+[[ "$ARTIFACT_ROOT" = /* ]] || { echo "ARTIFACT_ROOT must be absolute" >&2; exit 2; }
+# Preserve available reports on failure too; never discard the original exit status.
+trap 'result=$?; for report in coverage.json coverage.lcov coverage.txt; do if [[ -f "$report" ]]; then cp -- "$report" "$ARTIFACT_ROOT/" || result=1; fi; done; exit "$result"' EXIT
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-never}"
 
