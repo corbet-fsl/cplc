@@ -353,3 +353,10 @@ Neither a signature nor the digest exports global gate facts or establishes a
 current passport by itself. The original native accounting/deposit protocol is
 unchanged. Owner tests are authored; standalone CPLC native execution remains
 blocked by its declared environment's missing pkg-config/OpenSSL.
+
+
+`record_epoch_settings` checks the catalogue definition and projects the period
+from the same actual active Rulebook record/effective epoch. The host chooses the
+key explicitly and retains/rechecks its current Policy guard; no unsigned member
+profile, submitted descriptor, default duration or unsupported catalogue supplies
+publication policy.

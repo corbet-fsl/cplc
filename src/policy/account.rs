@@ -2,6 +2,22 @@
 use super::*;
 
 impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
+    /// Project the configured record period from this actual active Rulebook.
+    /// Validate its immutable catalogue metadata on the same record used for the
+    /// effective settings. Caller serialization/currentness remains required.
+    pub async fn record_epoch_settings(
+        &self,
+        key: &str,
+        now: u64,
+    ) -> Result<crbk::RecordEpochSettings> {
+        let state = self.current().await?;
+        let active = self.active(now).await?;
+        crbk::RecordEpochSettings::validate_catalogue(&active.change.rulebook, key)?;
+        let mut snapshot = active.snapshot(&state.community, timestamp(now)?)?;
+        snapshot.policy_epoch = effective_epoch(state.epoch, active.change.policy_epoch)?;
+        crbk::RecordEpochSettings::from_snapshot(&snapshot, key).map_err(Error::from)
+    }
+
     /// Issue the v3 account grant from the same current admission decision as a
     /// credential. Policy owns the signing key and projects the actual retained
     /// Balance digest; the caller selects only one already-authorized device.

@@ -225,3 +225,27 @@ async fn missing_invalid_or_invalidated_owner_authority_returns_no_grant() {
         Err(Error::Missing)
     ));
 }
+
+#[tokio::test]
+async fn period_projection_checks_actual_current_catalogue_without_defaults() {
+    const KEY: &str = "record/window";
+    let mut rules = book(crbk::ActionPolicy::default());
+    crbk::RecordEpochSettings::define(&mut rules, KEY).unwrap();
+    let mut policy = memory_with(rules.clone()).await;
+    assert!(policy.record_epoch_settings(KEY, NOW).await.is_err());
+    rules
+        .set_community(KEY, Some(serde_json::json!(100)))
+        .unwrap();
+    policy
+        .schedule_rules(Some(1), change(rules, 2, NOW as i64))
+        .await
+        .unwrap();
+    let period = policy.record_epoch_settings(KEY, NOW).await.unwrap();
+    assert_eq!(period.period_seconds, 100);
+    assert!(
+        policy
+            .record_epoch_settings("member/window", NOW)
+            .await
+            .is_err()
+    );
+}
