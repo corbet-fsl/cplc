@@ -4,6 +4,7 @@ mod account;
 mod balance;
 mod certificate;
 mod guarded;
+mod role;
 mod root_board;
 mod settlement;
 
