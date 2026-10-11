@@ -5,6 +5,7 @@ mod balance;
 mod certificate;
 mod guarded;
 mod root_board;
+mod settlement;
 
 use crbk::{GateLevel, Selection};
 use serde::Serialize;
