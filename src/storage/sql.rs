@@ -4,6 +4,10 @@ use super::MAX_STORED_DOCUMENT_BYTES;
 use super::{Storage, StoredPolicy, validate_transition};
 use crate::{Error, Result, identifier};
 
+#[cfg(test)]
+#[path = "sql/writer_tests.rs"]
+mod writer_tests;
+
 /// Append to the composition root's complete numbered migration history.
 pub const SCHEMA: &str = "
 CREATE TABLE cplc_policy (
@@ -101,8 +105,27 @@ fn entries(revocations: &crate::Revocations) -> Result<std::collections::BTreeSe
     Ok(entries)
 }
 
-async fn read(tx: &mut crlt::Transaction, scope: &str) -> Result<Option<StoredPolicy>> {
-    let mut state = decode(&tx.query(SELECT, [1i64]).await?, scope)?;
+enum Reader<'a> {
+    Committed(&'a Community),
+    Writer(&'a mut crlt::Transaction),
+}
+
+impl Reader<'_> {
+    async fn query(
+        &mut self,
+        sql: &str,
+        params: impl crlt::IntoParams,
+    ) -> crlt::Result<Vec<crlt::Row>> {
+        match self {
+            Self::Committed(scope) => scope.query(sql, params).await,
+            Self::Writer(tx) => tx.query(sql, params).await,
+        }
+    }
+}
+
+async fn read(tx: &mut Reader<'_>, scope: &str) -> Result<Option<StoredPolicy>> {
+    let header = tx.query(SELECT, [1i64]).await?;
+    let mut state = decode(&header, scope)?;
     if let Some(state) = &mut state {
         let mut after = String::new();
         loop {
@@ -131,8 +154,30 @@ async fn read(tx: &mut crlt::Transaction, scope: &str) -> Result<Option<StoredPo
             }
         }
         state.validate()?;
+        if matches!(tx, Reader::Committed(_)) {
+            // Every revocation change and the strictly increasing Policy
+            // revision commit together. Bracket all pages with the exact
+            // committed header; a concurrent mutation refuses this read rather
+            // than combining authority from different snapshots. This avoids
+            // acquiring a second writer inside an owner's final transaction.
+            let after = tx.query(SELECT, [1i64]).await?;
+            same_header(&header, &after)?;
+        }
     }
     Ok(state)
+}
+
+fn same_header(before: &[crlt::Row], after: &[crlt::Row]) -> Result<()> {
+    let before = before.first().ok_or(Error::Corrupt)?;
+    let after = after.first().ok_or(Error::Conflict)?;
+    if before.get_i64(0).map_err(|_| Error::Corrupt)?
+        != after.get_i64(0).map_err(|_| Error::Corrupt)?
+        || before.get_str(1).map_err(|_| Error::Corrupt)?
+            != after.get_str(1).map_err(|_| Error::Corrupt)?
+    {
+        return Err(Error::Conflict);
+    }
+    Ok(())
 }
 
 fn decode(rows: &[crlt::Row], scope: &str) -> Result<Option<StoredPolicy>> {
@@ -158,10 +203,7 @@ impl Storage for LibsqlStore {
         &self.name
     }
     async fn load(&self) -> Result<Option<StoredPolicy>> {
-        let mut tx = self.scope.tx().await?;
-        let state = read(&mut tx, &self.name).await?;
-        tx.commit().await?;
-        Ok(state)
+        read(&mut Reader::Committed(&self.scope), &self.name).await
     }
     async fn compare_exchange(&self, expected: Option<u64>, next: &StoredPolicy) -> Result<()> {
         self.exchange_with_guard(expected, next, &mut CallerAuthorized)
@@ -196,7 +238,7 @@ impl LibsqlStore {
         guard: &mut G,
     ) -> Result<()> {
         let mut tx = self.scope.tx().await?;
-        let previous = read(&mut tx, &self.name).await?;
+        let previous = read(&mut Reader::Writer(&mut tx), &self.name).await?;
         validate_transition(&self.name, previous.as_ref(), expected, next)?;
         let old_entries = entries(
             &previous
