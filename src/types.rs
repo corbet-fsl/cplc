@@ -228,6 +228,9 @@ pub struct TrustManifest {
     pub key_ring: Vec<u8>,
     /// Current schema version.
     pub schema_version: u32,
+    /// Required Balance publication floor, absent only before configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub balance_revision: Option<u64>,
 }
 /// Domain separation for the signed manifest payload.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

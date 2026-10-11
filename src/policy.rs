@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+mod balance;
 mod certificate;
 
 use crbk::{GateLevel, Selection};
@@ -51,6 +52,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             communities: BTreeSet::new(),
             revocations: Revocations::default(),
             publications: BTreeMap::new(),
+            balance: None,
             key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
@@ -80,7 +82,11 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             let latest = rules.load(&state.community, Selection::Latest).await?;
             effective_epoch(state.epoch, latest.map_or(0, |r| r.change.policy_epoch))?;
             state.credential_format = Some(crate::CredentialPurpose::CommunityAdmission);
-            for publication in state.publications.values_mut() {
+            for publication in state
+                .publications
+                .values_mut()
+                .chain(state.balance.iter_mut())
+            {
                 publication.cose = None;
             }
         }
@@ -146,7 +152,11 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let latest = self.rules.load(&next.community, Selection::Latest).await?;
         next.epoch = next_counter(next.epoch)?;
         effective_epoch(next.epoch, latest.map_or(0, |r| r.change.policy_epoch))?;
-        for publication in next.publications.values_mut() {
+        for publication in next
+            .publications
+            .values_mut()
+            .chain(next.balance.iter_mut())
+        {
             publication.cose = None;
         }
         Ok(())
@@ -433,6 +443,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             policy_epoch: effective_epoch(state.epoch, active.change.policy_epoch)?,
             key_ring: self.key_ring()?.to_cbor(),
             schema_version: state.schema.as_ref().ok_or(Error::Missing)?.version,
+            balance_revision: state
+                .balance
+                .as_ref()
+                .map(|publication| publication.revision),
         };
         let until = self
             .validity_limit(now, state.config.snapshot_validity, &active)

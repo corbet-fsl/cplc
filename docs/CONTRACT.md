@@ -306,3 +306,33 @@ validity ends. The hosting service owns the final authorization boundary: use it
 trusted current clock, check result expiry and current policy/legal state, and
 re-evaluate when the earlier context is no longer current. Passing an old `now`
 through delayed storage work does not establish completion-time freshness.
+
+## Original Balance publication composition
+
+The community host obtains `balance_version(now)` under the same serialized
+configuration operation, asks its one configured AccountService for
+`public_verifier_material(version.revision, version.epoch)`, and submits that
+canonical type to `publish_balance(material, now)`. Policy validates the owner
+semantics and exact community/counters, uses its existing persistent signer and
+publication lifetime (also capped by the material's policy expiry), commits
+the original COSE bytes through the same Policy CAS, and only then returns them.
+There is no second signer or ledger, and no member-facing material submission.
+
+`balance_publication(now)` is absent only before accounting is configured.
+Epoch changes and the retained credential-format migration clear bytes but
+preserve its required revision; stale, expired or unacknowledged material refuses
+the whole refresh until the host reprojects it. The manifest's optional
+`balance_revision` makes this kind mandatory when configured. Beacon transports
+the original canonical document independently of the Rulebook settings field.
+Current passkey revocation storage and credential purpose/action semantics are
+unchanged; no RootBoard/v3 passport port is added here.
+
+The application explicitly selects the Rulebook catalogue key for the record
+period and checks its definition controls. Publishers resolve its current value
+before passing it to AccountService's original `publish_record_epoch` operation;
+Forum obtains that same value from authenticated current settings. Neither a
+submitted descriptor nor the independent enrollment checkpoint period supplies
+the duration. The actual host join, serialized configuration transitions, native
+R2 success and full Forum G2 composition remain separate qualification work.
+The original signed public-material/SQLite signer/cache/reopen/failure vectors
+and new storage-floor regressions are authored, not executed by this source port.

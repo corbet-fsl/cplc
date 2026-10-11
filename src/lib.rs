@@ -9,6 +9,8 @@ mod storage;
 mod types;
 mod verification;
 
+/// Original canonical accounting publication supplied by the configured owner.
+pub use cblc::publication::PublicVerifierMaterial;
 pub use policy::Policy;
 pub use storage::{LibsqlStore, MemoryStore, SCHEMA, Storage, StoredPolicy};
 pub use types::*;
