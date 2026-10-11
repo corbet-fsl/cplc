@@ -345,8 +345,12 @@ action, typed gate receipts, membership, schema and device authority as `issue`;
 it retains MembershipSource's real lease through all publication reads and durable
 COSE signing. The grant includes only an opaque cohort digest and bounds expiry by
 that cohort, the credential decision, the retained Balance envelope and the actual
-account policy. Its Balance policy digest and community policy epoch come from
-those owners. Members cannot select arbitrary payload bytes, issuer actions or
+account policy. Its admission policy digest comes from the required immutable
+`admissionPolicyDigest` in the actual v2 Balance material. The separate dynamic
+economic `policyDigest` remains a native proof binding; waiting-period tuning
+cannot replace eligibility policy or reset issuer trust. Legacy v1 material has
+no default projection. Its community policy epoch comes from those owners.
+Members cannot select arbitrary payload bytes, issuer actions or
 signing keys through this port. The host must retain its current Policy/cohort
 lease and enforce the original epoch/digest join before forwarding account work.
 Neither a signature nor the digest exports global gate facts or establishes a

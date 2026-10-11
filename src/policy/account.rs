@@ -72,7 +72,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             member_id: cblc::admission::member_id(&pseudonym),
             pseudonym: credential.member,
             chat_public_key: B64.encode(&device),
-            policy_digest: B64.encode(&material.policy_digest),
+            policy_digest: B64.encode(&material.admission_policy_digest),
             policy_epoch: credential.policy_epoch,
             passport_policy_digest: B64.encode(&context.passport_policy_digest),
             issued_at: crate::day(now),

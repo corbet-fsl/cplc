@@ -84,9 +84,12 @@ async fn current_policy_ring_grant_binds_same_member_device_policy_and_window() 
     assert_eq!(grant.expires_at, 1500);
     assert_eq!(grant.policy_epoch, policy.epoch(NOW).await.unwrap());
     assert_eq!(grant.passport_policy_digest, B64.encode(&[11; 32]));
+    // The native fixture configures encoded(3) as immutable admission trust.
+    // Community rebinding above changes economics, never that eligibility key.
+    assert_eq!(grant.policy_digest, B64.encode(&[3; 32]));
     let trust = cblc::admission::AdmissionTrust {
         community_id: COMMUNITY.into(),
-        policy_digest: grant.policy_digest.clone(),
+        policy_digest: B64.encode(&[3; 32]),
         policy_keys: policy.key_ring().unwrap().clone(),
     };
     cblc::admission::verify_admission(&grant, &trust, NOW).unwrap();
