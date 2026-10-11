@@ -17,10 +17,18 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         {
             return Err(Error::Verification);
         }
+        // Every Policy signature is issued at UTC-day precision, so this signer
+        // refuses a second-precision timestamp instead of letting the next day
+        // signature look like a regression. The caller rounds; it is never done here.
+        if invitation.issued_at != crate::day(invitation.issued_at) {
+            return Err(Error::Invalid(
+                "role invitation must be issued at a UTC day boundary",
+            ));
+        }
         let payload = cvch::role::issuance_bytes(invitation)
             .map_err(|_| Error::Invalid("role invitation"))?;
-        // The original role codec binds these exact envelope timestamps. Unlike
-        // daily public feeds they must not be rounded or silently extended.
+        // The original role codec binds these exact envelope timestamps: issued_at
+        // is the day boundary checked above and valid_until is never extended.
         let signed = self
             .signer
             .sign(
