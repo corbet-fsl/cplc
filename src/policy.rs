@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod account;
 mod balance;
 mod certificate;
+mod root_board;
 
 use crbk::{GateLevel, Selection};
 use serde::Serialize;
@@ -54,6 +55,9 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             revocations: Revocations::default(),
             publications: BTreeMap::new(),
             balance: None,
+            root_board: None,
+            root_board_issuer: None,
+            root_board_cohort: None,
             key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
@@ -87,6 +91,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 .publications
                 .values_mut()
                 .chain(state.balance.iter_mut())
+                .chain(state.root_board.iter_mut())
             {
                 publication.cose = None;
             }
@@ -157,6 +162,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             .publications
             .values_mut()
             .chain(next.balance.iter_mut())
+            .chain(next.root_board.iter_mut())
         {
             publication.cose = None;
         }
@@ -444,6 +450,10 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             policy_epoch: effective_epoch(state.epoch, active.change.policy_epoch)?,
             key_ring: self.key_ring()?.to_cbor(),
             schema_version: state.schema.as_ref().ok_or(Error::Missing)?.version,
+            root_board_revision: state
+                .root_board
+                .as_ref()
+                .map(|publication| publication.revision),
             balance_revision: state
                 .balance
                 .as_ref()

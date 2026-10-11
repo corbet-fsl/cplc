@@ -242,6 +242,9 @@ pub struct TrustManifest {
     /// Required Balance publication floor, absent only before configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub balance_revision: Option<u64>,
+    /// Required common root-board publication floor after configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_board_revision: Option<u64>,
 }
 /// Domain separation for the signed manifest payload.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

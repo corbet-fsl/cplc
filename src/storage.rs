@@ -41,14 +41,20 @@ pub struct StoredPolicy {
     pub(crate) publications: BTreeMap<SnapshotKind, Publication>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) balance: Option<Publication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) root_board: Option<Publication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) root_board_issuer: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) root_board_cohort: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_transitions: Vec<cbcn::KeyTransition>,
 }
 
-// Six independently bounded COSE publications, each encoded as JSON byte
+// Seven independently bounded COSE publications, each encoded as JSON byte
 // arrays (at most four bytes per byte), plus the bounded core document.
 pub(crate) const MAX_STORED_DOCUMENT_BYTES: usize =
-    MAX_DOCUMENT_BYTES + 6 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 4 * cbcn::MAX_KEY_TRANSITION_BYTES;
+    MAX_DOCUMENT_BYTES + 7 * 4 * (MAX_DOCUMENT_BYTES + 8192) + 4 * cbcn::MAX_KEY_TRANSITION_BYTES;
 
 impl StoredPolicy {
     /// Scope permanently bound to this document.
@@ -118,7 +124,12 @@ impl StoredPolicy {
         if previous.is_some() && previous != self.schema.as_ref() {
             return Err(Error::Corrupt);
         }
-        for publication in self.publications.values().chain(self.balance.iter()) {
+        for publication in self
+            .publications
+            .values()
+            .chain(self.balance.iter())
+            .chain(self.root_board.iter())
+        {
             if publication.revision == 0
                 || publication.revision > i64::MAX as u64
                 || publication.cose.as_ref().is_some_and(|bytes| {
@@ -127,6 +138,29 @@ impl StoredPolicy {
             {
                 return Err(Error::Corrupt);
             }
+        }
+        match (
+            &self.root_board,
+            &self.root_board_issuer,
+            self.root_board_cohort,
+        ) {
+            (None, None, None) => (),
+            (Some(_), Some(bytes), Some(cohort)) => {
+                let issuer =
+                    cpsd::IssuerPublicKey::from_bytes(bytes).map_err(|_| Error::Corrupt)?;
+                if issuer.to_bytes() != *bytes {
+                    return Err(Error::Corrupt);
+                }
+                cpsd::RootBoardPublicKey::from_authenticated_beacon(
+                    issuer,
+                    cpsd::CommunityId::new(self.community.as_bytes())
+                        .map_err(|_| Error::Corrupt)?,
+                    self.epoch,
+                    cohort,
+                )
+                .map_err(|_| Error::Corrupt)?;
+            }
+            _ => return Err(Error::Corrupt),
         }
         let mut document = self.clone();
         document.revocations = Revocations::default();
@@ -138,6 +172,7 @@ impl StoredPolicy {
             .publications
             .values_mut()
             .chain(document.balance.iter_mut())
+            .chain(document.root_board.iter_mut())
         {
             publication.cose = None;
         }
@@ -196,6 +231,7 @@ pub(crate) fn validate_transition(
                     .publications
                     .values()
                     .chain(next.balance.iter())
+                    .chain(next.root_board.iter())
                     .any(|p| p.cose.is_some()))
         {
             return Err(Error::Corrupt);
@@ -210,6 +246,18 @@ pub(crate) fn validate_transition(
             let new = next.publications.get(kind).ok_or(Error::Corrupt)?;
             if new.revision < old.revision
                 || (new.revision == old.revision && new.cose.is_some() && new.cose != old.cose)
+            {
+                return Err(Error::Corrupt);
+            }
+        }
+        if let Some(old) = &previous.root_board {
+            let new = next.root_board.as_ref().ok_or(Error::Corrupt)?;
+            if new.revision < old.revision
+                || (new.revision == old.revision && new.cose.is_some() && new.cose != old.cose)
+                || next.root_board_issuer != previous.root_board_issuer
+                || next.root_board_cohort < previous.root_board_cohort
+                || (new.revision == old.revision
+                    && next.root_board_cohort != previous.root_board_cohort)
             {
                 return Err(Error::Corrupt);
             }

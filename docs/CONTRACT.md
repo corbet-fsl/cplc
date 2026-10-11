@@ -364,3 +364,21 @@ from the same actual active Rulebook record/effective epoch. The host chooses th
 key explicitly and retains/rechecks its current Policy guard; no unsigned member
 profile, submitted descriptor, default duration or unsupported catalogue supplies
 publication policy.
+
+## Common root-board publication
+
+The original privileged root-board publisher binds one CPSD public issuer and a
+monotonic cohort floor in the policy document. It signs the original descriptor
+through the existing SettingsSnapshot signer, bounded by the configured snapshot
+lifetime, next Rulebook activation and exclusive cohort expiry. Beacon includes
+the exact retained bytes and the signed manifest carries their revision floor.
+Epoch invalidation clears cached bytes while retaining the issuer, cohort and
+revision; reopening never permits replacing or rolling back that binding.
+
+Typed root issuance contexts and presentation requests must match this current
+publication exactly. Their original inclusive challenge deadline becomes the
+exclusive COSE deadline plus one, within the existing 300-second request bound.
+Signing supplies no membership, role, nonce-consumption or holder-proof authority;
+those remain with the original CPSD and application owners. Ordinary passport
+requests retain their maintained v2 encoding; root contexts retain their original
+v3 framing and exact source-request comparison.
