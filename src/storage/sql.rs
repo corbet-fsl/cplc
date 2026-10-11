@@ -92,6 +92,12 @@ fn entries(revocations: &crate::Revocations) -> Result<std::collections::BTreeSe
             serde_json::to_string(device).map_err(|_| Error::Corrupt)?
         ));
     }
+    for credential in &revocations.passkeys {
+        entries.insert(format!(
+            "passkey:{}",
+            serde_json::to_string(credential).map_err(|_| Error::Corrupt)?
+        ));
+    }
     Ok(entries)
 }
 
@@ -113,6 +119,11 @@ async fn read(tx: &mut crlt::Transaction, scope: &str) -> Result<Option<StoredPo
                         .revocations
                         .devices
                         .insert(serde_json::from_str(device).map_err(|_| Error::Corrupt)?);
+                } else if let Some(credential) = entry.strip_prefix("passkey:") {
+                    state
+                        .revocations
+                        .passkeys
+                        .insert(serde_json::from_str(credential).map_err(|_| Error::Corrupt)?);
                 } else {
                     return Err(Error::Corrupt);
                 }
