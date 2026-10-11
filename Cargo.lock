@@ -1635,9 +1635,10 @@ dependencies = [
 [[package]]
 name = "cvch"
 version = "0.2.1"
-source = "git+https://git.corbet.ch/corbet-foss/cvch?branch=main#718cee1e3e9f6e5876778d682296422b975511dd"
+source = "git+https://git.corbet.ch/corbet-foss/cvch?branch=main#7cb895c09b712f55d360c88cbf89dd21f2292dd7"
 dependencies = [
  "cfbk",
+ "csgn",
  "ed25519-dalek 3.0.0",
  "hex",
  "hmac 0.13.0",
