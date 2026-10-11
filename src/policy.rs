@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+mod account;
 mod balance;
 mod certificate;
 
@@ -696,6 +697,23 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         request: CredentialRequest<'_>,
         now: u64,
     ) -> Result<Vec<u8>> {
+        let (credential, until, _membership_lease) =
+            self.credential_candidate(membership, request, now).await?;
+        let payload = encode(&credential)?;
+        self.signer
+            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
+            .await
+            .map_err(Error::from)
+    }
+
+    // Both issuance paths retain the same authoritative member lease through
+    // durable signing; this helper never signs or returns transport bytes.
+    async fn credential_candidate<M: crate::MembershipSource>(
+        &mut self,
+        membership: &M,
+        request: CredentialRequest<'_>,
+        now: u64,
+    ) -> Result<(Credential, u64, M::Lease)> {
         let state = self.current().await?.clone();
         self.validate_snapshot(request.snapshot, now).await?;
         let gates = request
@@ -716,7 +734,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             request.pins,
             request.devices,
         )?;
-        let (facts, _membership_lease) = membership.membership(request.subject.id, now).await?;
+        let (facts, membership_lease) = membership.membership(request.subject.id, now).await?;
         validate_membership(&state.community, request.subject.id, &facts, now)?;
         if facts.authorized_devices.len() > MAX_ENTRIES
             || request
@@ -769,11 +787,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             pins: request.pins.to_vec(),
             devices: request.devices.to_vec(),
         };
-        let payload = encode(&credential)?;
-        self.signer
-            .sign(csgn::Kind::Credential, &payload, crate::day(now), until)
-            .await
-            .map_err(Error::from)
+        Ok((credential, until, membership_lease))
     }
 
     /// Rotate using an already provisioned secret-store key. Old public keys are

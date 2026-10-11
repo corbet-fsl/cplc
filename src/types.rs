@@ -188,6 +188,17 @@ pub struct Credential {
     pub devices: Vec<[u8; 32]>,
 }
 
+/// The original authenticated global cohort selected by the community facade.
+/// This is a privileged owner input, never decoded from an account request.
+/// cmty owns canonical hashing of its entire PassportPolicy (epoch, deadline,
+/// and disclosed gate set), and retains its current policy lease through signing.
+pub struct AccountGrantContext {
+    /// Hash of the exact authenticated global passport policy.
+    pub passport_policy_digest: [u8; 32],
+    /// Original exclusive cohort expiry, also bounds the grant envelope.
+    pub passport_valid_until: u64,
+}
+
 /// Trusted inputs assembled by cmty from membership and gatekeeping.
 /// This is deliberately not deserializable as an untrusted request body.
 ///

@@ -336,3 +336,20 @@ the duration. The actual host join, serialized configuration transitions, native
 R2 success and full Forum G2 composition remain separate qualification work.
 The original signed public-material/SQLite signer/cache/reopen/failure vectors
 and new storage-floor regressions are authored, not executed by this source port.
+
+
+Original account grant issuance uses `AccountGrantContext`, a privileged,
+non-deserializable input selected by Community from its authenticated complete
+passport policy. `issue_account_grant` evaluates the same current configured
+action, typed gate receipts, membership, schema and device authority as `issue`;
+it retains MembershipSource's real lease through all publication reads and durable
+COSE signing. The grant includes only an opaque cohort digest and bounds expiry by
+that cohort, the credential decision, the retained Balance envelope and the actual
+account policy. Its Balance policy digest and community policy epoch come from
+those owners. Members cannot select arbitrary payload bytes, issuer actions or
+signing keys through this port. The host must retain its current Policy/cohort
+lease and enforce the original epoch/digest join before forwarding account work.
+Neither a signature nor the digest exports global gate facts or establishes a
+current passport by itself. The original native accounting/deposit protocol is
+unchanged. Owner tests are authored; standalone CPLC native execution remains
+blocked by its declared environment's missing pkg-config/OpenSSL.
