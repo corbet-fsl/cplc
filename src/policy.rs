@@ -564,6 +564,27 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         checked: &cgts::CheckedGates,
         now: u64,
     ) -> Result<crbk::Decision> {
+        self.may_current(snapshot, subject, action, checked, now, now)
+            .await
+    }
+
+    /// Evaluate the original checked receipts at the current owner cut without
+    /// changing their verification timestamp or expiry. `checked_at` is the
+    /// original gate context; `now` comes from the trusted live owner clock.
+    /// The caller retains the actual member/key/legal authority and SAME writer
+    /// through its final effect: this pure verdict is not a replacement for it.
+    pub async fn may_current(
+        &self,
+        snapshot: &crate::VerifiedSnapshot,
+        subject: crbk::Subject<'_>,
+        action: &str,
+        checked: &cgts::CheckedGates,
+        checked_at: u64,
+        now: u64,
+    ) -> Result<crbk::Decision> {
+        if now < checked_at {
+            return Err(Error::Verification);
+        }
         self.validate_snapshot(snapshot, now).await?;
         let state = self.current().await?;
         if state.revocations.members.contains(subject.id) {
@@ -574,7 +595,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 snapshot: snapshot.settings(),
                 subject: subject.id,
                 action,
-                now: timestamp(now)?,
+                now: timestamp(checked_at)?,
             })
             .map_err(|_| Error::Verification)?;
         Ok(snapshot

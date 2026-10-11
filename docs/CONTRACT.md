@@ -28,6 +28,12 @@ The admission action is persisted in configuration and cannot be selected by an
 issuance request. The facade evaluates that action itself using crbk; it never
 accepts a caller-provided verdict.
 
+`may_current` retains the original checked gate timestamp while evaluating the
+same receipts at a later trusted owner time. It validates the actual current
+Policy snapshot, preserves every original gate expiry and refuses clock rollback
+or receipt-context rebinding. This pure evaluation does not replace the actual
+member, key, session and legal checks retained through the caller's final writer.
+
 The signer issuer must exactly equal the community identifier. Global issuers
 must use another scope and separate keys. Seeds are provisioned in the service's
 secret store, never Turso. csgn alone performs signing, key rotation, key retention,
