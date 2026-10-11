@@ -71,6 +71,5 @@ rustup run nightly cargo llvm-cov --version
 if [ "$CHECKS" = "resolve-dependencies" ]; then
   exec "$CCID_BIN" check --repo "$PWD" --check resolve-dependencies
 fi
-"$CCID_BIN" cached --repo "$PWD" --check verify
-test -s ".ccid/results/verify.jsonl"
-"$CCID_BIN" check --repo "$PWD" --check advisories
+# openssl-sys links the system OpenSSL; execute checks inside the pinned shell.
+nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; "$CCID_BIN" cached --repo "$PWD" --check verify; test -s ".ccid/results/verify.jsonl"; exec "$CCID_BIN" check --repo "$PWD" --check advisories'
