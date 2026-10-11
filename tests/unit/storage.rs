@@ -71,7 +71,7 @@ async fn reopened_policy_refuses_foreign_state_in_the_actual_memory_store() {
 #[tokio::test]
 async fn signed_balance_floor_survives_rejected_current_state_transitions() {
     let fixture: serde_json::Value =
-        serde_json::from_slice(include_bytes!("../fixtures/balance-material.json")).unwrap();
+        serde_json::from_slice(include_bytes!("../fixtures/balance-material-v2.json")).unwrap();
     let material: crate::PublicVerifierMaterial =
         serde_json::from_value(fixture["material"].clone()).unwrap();
     material.validate_at(&material.community, 100).unwrap();

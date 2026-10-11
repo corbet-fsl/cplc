@@ -7,7 +7,7 @@ use serde_json::Value;
 
 fn fixture_material() -> PublicVerifierMaterial {
     let fixture: Value =
-        serde_json::from_slice(include_bytes!("fixtures/balance-material.json")).unwrap();
+        serde_json::from_slice(include_bytes!("fixtures/balance-material-v2.json")).unwrap();
     let ring = csgn::KeyRing::from_cbor(
         &serde_json::from_value::<Vec<u8>>(fixture["configuredFixtureRing"].clone()).unwrap(),
     )
@@ -19,6 +19,21 @@ fn fixture_material() -> PublicVerifierMaterial {
     let material: PublicVerifierMaterial = serde_json::from_slice(signed.payload()).unwrap();
     material.validate_at(&material.community, NOW).unwrap();
     material
+}
+
+#[test]
+fn genuine_legacy_signature_does_not_supply_required_v2_admission_authority() {
+    let fixture: Value =
+        serde_json::from_slice(include_bytes!("fixtures/balance-material.json")).unwrap();
+    let ring = csgn::KeyRing::from_cbor(
+        &serde_json::from_value::<Vec<u8>>(fixture["configuredFixtureRing"].clone()).unwrap(),
+    )
+    .unwrap();
+    let bytes: Vec<u8> = serde_json::from_value(fixture["signed"].clone()).unwrap();
+    let signed = ring
+        .verify(&bytes, csgn::Kind::SettingsSnapshot, 200)
+        .unwrap();
+    assert!(serde_json::from_slice::<PublicVerifierMaterial>(signed.payload()).is_err());
 }
 
 async fn setup() -> (tempfile::TempDir, crlt::Db, crlt::Db, SqlPolicy) {

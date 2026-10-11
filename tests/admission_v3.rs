@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 async fn configured() -> MemoryPolicy {
     let mut policy = memory_with(book(crbk::ActionPolicy::default())).await;
     let fixture: serde_json::Value =
-        serde_json::from_slice(include_bytes!("fixtures/balance-material.json")).unwrap();
+        serde_json::from_slice(include_bytes!("fixtures/balance-material-v2.json")).unwrap();
     let mut material: PublicVerifierMaterial =
         serde_json::from_value(fixture["material"].clone()).unwrap();
     material.community = COMMUNITY.into();
