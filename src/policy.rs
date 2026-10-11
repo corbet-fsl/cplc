@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod account;
 mod balance;
 mod certificate;
+mod guarded;
 mod root_board;
 
 use crbk::{GateLevel, Selection};
@@ -250,8 +251,18 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     pub async fn schedule_rules(
         &mut self,
         expected: Option<u64>,
-        mut change: crbk::Change,
+        change: crbk::Change,
     ) -> Result<crbk::Revision> {
+        let (state, change) = self.prepare_rules(change).await?;
+        self.state = None;
+        let result = self.rules.append(&state.community, expected, change).await;
+        self.finish_rules(state, result)
+    }
+
+    async fn prepare_rules(
+        &self,
+        mut change: crbk::Change,
+    ) -> Result<(StoredPolicy, crbk::Change)> {
         let state = self.current().await?.clone();
         let latest = self.rules.load(&state.community, Selection::Latest).await?;
         effective_epoch(state.epoch, change.policy_epoch)?;
@@ -264,8 +275,14 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         cgts::gates::define_settings(&mut change.rulebook)
             .map_err(|_| Error::Invalid("gate settings"))?;
         change.rulebook.validate()?;
-        self.state = None;
-        let result = self.rules.append(&state.community, expected, change).await;
+        Ok((state, change))
+    }
+
+    fn finish_rules(
+        &mut self,
+        state: StoredPolicy,
+        result: crbk::Result<crbk::Revision>,
+    ) -> Result<crbk::Revision> {
         match result {
             Ok(revision) => {
                 self.state = Some(state);
@@ -286,6 +303,15 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
     /// This authorized operation advances the epoch immediately. Call
     /// `cshm::classify_changes` first when presenting an administrator preview.
     pub async fn set_schema(&mut self, schema: cshm::Schema) -> Result<Option<cshm::ChangeSet>> {
+        let (next, changes) = self.prepare_schema(schema).await?;
+        self.commit(next).await?;
+        Ok(changes)
+    }
+
+    async fn prepare_schema(
+        &self,
+        schema: cshm::Schema,
+    ) -> Result<(StoredPolicy, Option<cshm::ChangeSet>)> {
         let mut next = self.current().await?.clone();
         if schema.community != next.community
             || schema.public.len() + schema.private.len() > MAX_ENTRIES
@@ -327,8 +353,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             },
         )?;
         self.advance_epoch(&mut next).await?;
-        self.commit(next).await?;
-        Ok(changes)
+        Ok((next, changes))
     }
 
     /// Replace the explicit public directory and advance the epoch.
@@ -375,6 +400,20 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         effective_at: u64,
         notice_seconds: u64,
     ) -> Result<crbk::Revision> {
+        let (expected, change) = self
+            .prepare_setting(key, edit, now, effective_at, notice_seconds)
+            .await?;
+        self.schedule_rules(Some(expected), change).await
+    }
+
+    async fn prepare_setting(
+        &self,
+        key: &str,
+        edit: crate::SettingEdit,
+        now: u64,
+        effective_at: u64,
+        notice_seconds: u64,
+    ) -> Result<(u64, crbk::Change)> {
         let state = self.current().await?;
         let latest = self
             .rules
@@ -386,8 +425,8 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             crate::SettingEdit::Community(value) => rulebook.set_community(key, value)?,
             crate::SettingEdit::Platform(value) => rulebook.set_platform(key, value)?,
         }
-        self.schedule_rules(
-            Some(latest.revision),
+        Ok((
+            latest.revision,
             crbk::Change {
                 rulebook,
                 announced_at: timestamp(now)?,
@@ -395,8 +434,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 notice_seconds,
                 policy_epoch: next_counter(latest.change.policy_epoch)?,
             },
-        )
-        .await
+        ))
     }
 
     /// Current revocation state, with no member activity history.

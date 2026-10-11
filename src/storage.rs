@@ -202,6 +202,17 @@ pub trait Storage: Send + Sync {
         expected: Option<u64>,
         next: &StoredPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
+    /// Check the actual retained owner under the existing CAS writer, after
+    /// staging the document and before commit. Unsupported stores refuse.
+    fn compare_exchange_checked<G: crbk::CommitGuard>(
+        &self,
+        expected: Option<u64>,
+        next: &StoredPolicy,
+        guard: &mut G,
+    ) -> impl Future<Output = Result<()>> + Send {
+        let _ = (expected, next, guard);
+        async { Err(Error::Storage) }
+    }
 }
 
 pub(crate) fn validate_transition(

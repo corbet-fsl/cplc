@@ -164,6 +164,37 @@ impl Storage for LibsqlStore {
         Ok(state)
     }
     async fn compare_exchange(&self, expected: Option<u64>, next: &StoredPolicy) -> Result<()> {
+        self.exchange_with_guard(expected, next, &mut CallerAuthorized)
+            .await
+    }
+    async fn compare_exchange_checked<G: crbk::CommitGuard>(
+        &self,
+        expected: Option<u64>,
+        next: &StoredPolicy,
+        guard: &mut G,
+    ) -> Result<()> {
+        self.exchange_with_guard(expected, next, guard).await
+    }
+}
+
+// Only the unchanged caller-authorized API uses this private adapter.
+struct CallerAuthorized;
+impl crbk::CommitGuard for CallerAuthorized {
+    async fn check(&mut self) -> crbk::Result<()> {
+        Ok(())
+    }
+    fn release(&mut self) -> crbk::Result<()> {
+        Ok(())
+    }
+}
+
+impl LibsqlStore {
+    async fn exchange_with_guard<G: crbk::CommitGuard>(
+        &self,
+        expected: Option<u64>,
+        next: &StoredPolicy,
+        guard: &mut G,
+    ) -> Result<()> {
         let mut tx = self.scope.tx().await?;
         let previous = read(&mut tx, &self.name).await?;
         validate_transition(&self.name, previous.as_ref(), expected, next)?;
@@ -199,6 +230,9 @@ impl Storage for LibsqlStore {
         if count != 1 {
             return Err(Error::Conflict);
         }
-        tx.commit().await.map_err(Error::from)
+        guard.check().await.map_err(Error::from)?;
+        guard.release().map_err(Error::from)?;
+        tx.commit().await.map_err(Error::from)?;
+        guard.release().map_err(|_| Error::Storage)
     }
 }
