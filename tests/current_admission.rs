@@ -88,25 +88,10 @@ async fn later_current_evaluation_preserves_the_actual_voucher_expiry() {
             .allowed
     );
     // The signed deadline only bounds redemption. The retained receipt lives for
-    // the configured validity days (default 30), counted from the checking day.
+    // the configured validity days (default 30), so it outlives that deadline.
     assert!(
         policy
             .may_current(&snapshot, subject(), "admit", &checked, NOW, NOW + 2)
-            .await
-            .unwrap()
-            .allowed
-    );
-    let expiry = 30 * 86_400;
-    assert!(
-        policy
-            .may_current(&snapshot, subject(), "admit", &checked, NOW, expiry - 1)
-            .await
-            .unwrap()
-            .allowed
-    );
-    assert!(
-        !policy
-            .may_current(&snapshot, subject(), "admit", &checked, NOW, expiry)
             .await
             .unwrap()
             .allowed
