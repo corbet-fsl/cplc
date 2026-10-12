@@ -36,7 +36,7 @@ fn revoked(original: &StoredPolicy) -> StoredPolicy {
             .map(|i| format!("member-{i:04}"))
             .collect::<Vec<_>>()
     );
-    value["revocations"]["devices"] = json!([[19u8; 32]]);
+    value["revocations"]["devices"] = json!([vec![19u8; 32]]);
     value["revocations"]["passkeys"] = json!([[23u8, 24u8]]);
     serde_json::from_value(value).unwrap()
 }
