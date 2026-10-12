@@ -735,17 +735,18 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             now,
         };
         let ring = self.key_ring()?;
-        if crate::verify_snapshot::<serde_json::Value>(ring, cose, expected).is_err() {
-            return Ok(None);
-        }
-        let Ok(verified) = ring.verify(cose, kind.signing_kind(), now) else {
+        let Some(valid_until) = crate::verify_snapshot::<serde_json::Value>(ring, cose, expected)
+            .ok()
+            .and_then(|_| ring.verify(cose, kind.signing_kind(), now).ok())
+            .map(|verified| verified.valid_until())
+        else {
             return Ok(None);
         };
         // A revision scheduled after this publication was signed must cut its
         // validity at the activation; republish so the deadline reflects it.
         let active = self.active(now).await?;
         if let Some(activation) = self.next_activation(&active).await?
-            && verified.valid_until() > activation
+            && valid_until > activation
         {
             return Ok(None);
         }
