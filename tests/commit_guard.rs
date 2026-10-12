@@ -2,7 +2,10 @@
 //! Actual policy SQL transactions; these cuts test persistence, not member proofs.
 mod common;
 use common::*;
-use cplc::{crbk::CommitGuard, *};
+use cplc::{
+    crbk::{CommitGuard, Storage as _},
+    *,
+};
 use std::{sync::Arc, time::Duration};
 
 struct Cut {
