@@ -50,10 +50,8 @@ async fn registered() -> (
                 ckyh::CreationMonth::new(2026, 10).unwrap(),
             )
             .unwrap();
-        let certificate = keys
-            .registration_certificate(user, registration.credential_id(), MEMBER)
-            .unwrap();
-        certificate
+        keys.registration_certificate(user, registration.credential_id(), MEMBER)
+            .unwrap()
     })
     .await
     .unwrap();
