@@ -39,6 +39,10 @@ async fn current_owner_projection_matches_genuine_signed_settings_and_activation
         .schedule_rules(Some(1), change(next, 2, (NOW + 10) as i64))
         .await
         .unwrap();
+    // The earlier publication outlives the activation; it is republished with
+    // its validity cut at the next effective revision.
+    let cut = policy.verified_settings(NOW + 1).await.unwrap();
+    assert!(cut.valid_until() <= NOW + 10);
     for (now, quota) in [(NOW + 9, 7), (NOW + 10, 9)] {
         let current = policy.outcome_quota_settings(KEY, now).await.unwrap();
         let signed = policy.verified_settings(now).await.unwrap();

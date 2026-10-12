@@ -734,10 +734,22 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             policy_epoch: self.epoch(now).await?,
             now,
         };
-        match crate::verify_snapshot::<serde_json::Value>(self.key_ring()?, cose, expected) {
-            Ok(_) => Ok(Some(cose.clone())),
-            Err(_) => Ok(None),
+        let ring = self.key_ring()?;
+        if crate::verify_snapshot::<serde_json::Value>(ring, cose, expected).is_err() {
+            return Ok(None);
         }
+        let Ok(verified) = ring.verify(cose, kind.signing_kind(), now) else {
+            return Ok(None);
+        };
+        // A revision scheduled after this publication was signed must cut its
+        // validity at the activation; republish so the deadline reflects it.
+        let active = self.active(now).await?;
+        if let Some(activation) = self.next_activation(&active).await?
+            && verified.valid_until() > activation
+        {
+            return Ok(None);
+        }
+        Ok(Some(cose.clone()))
     }
 
     async fn validity_limit(
