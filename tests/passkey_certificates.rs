@@ -16,40 +16,47 @@ async fn registered() -> (
     db.migrate(&[crlt::Migration::new(1, "keyhole", ckyh::LIBSQL_SCHEMA)])
         .await
         .unwrap();
-    let keys = ckyh::Passkeys::new(
-        ckyh::LibsqlStore::new(&db, COMMUNITY, tokio::runtime::Handle::current()).unwrap(),
-        COMMUNITY,
-        "members.example.test",
-        &[ckyh::Url::parse("https://members.example.test").unwrap()],
-    )
+    // The synchronous passkey store blocks its thread: never run it on an async task.
+    let handle = tokio::runtime::Handle::current();
+    let certificate = tokio::task::spawn_blocking(move || {
+        let keys = ckyh::Passkeys::new(
+            ckyh::LibsqlStore::new(&db, COMMUNITY, handle.clone()).unwrap(),
+            COMMUNITY,
+            "members.example.test",
+            &[ckyh::Url::parse("https://members.example.test").unwrap()],
+        )
+        .unwrap();
+        let user = ckyh::Uuid::from_u128(31);
+        let (mut options, pending) = keys.start_registration(user).unwrap();
+        options
+            .public_key
+            .authenticator_selection
+            .as_mut()
+            .unwrap()
+            .require_resident_key = false;
+        let response = SoftToken::new(true)
+            .unwrap()
+            .0
+            .perform_register(
+                ckyh::Url::parse("https://members.example.test").unwrap(),
+                options.public_key,
+                300_000,
+            )
+            .unwrap();
+        let registration = keys
+            .finish_registration(
+                pending,
+                &response.into(),
+                ckyh::CreationMonth::new(2026, 10).unwrap(),
+            )
+            .unwrap();
+        let certificate = keys
+            .registration_certificate(user, registration.credential_id(), MEMBER)
+            .unwrap();
+        certificate
+    })
+    .await
     .unwrap();
-    let user = ckyh::Uuid::from_u128(31);
-    let (mut options, pending) = keys.start_registration(user).unwrap();
-    options
-        .public_key
-        .authenticator_selection
-        .as_mut()
-        .unwrap()
-        .require_resident_key = false;
-    let response = SoftToken::new(true)
-        .unwrap()
-        .0
-        .perform_register(
-            ckyh::Url::parse("https://members.example.test").unwrap(),
-            options.public_key,
-            300_000,
-        )
-        .unwrap();
-    let registration = keys
-        .finish_registration(
-            pending,
-            &response.into(),
-            ckyh::CreationMonth::new(2026, 10).unwrap(),
-        )
-        .unwrap();
-    let certificate = keys
-        .registration_certificate(user, registration.credential_id(), MEMBER)
-        .unwrap();
     (directory, certificate)
 }
 

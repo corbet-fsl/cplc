@@ -240,10 +240,10 @@ async fn period_projection_checks_actual_current_catalogue_without_defaults() {
         .set_community(KEY, Some(serde_json::json!(100)))
         .unwrap();
     policy
-        .schedule_rules(Some(1), change(rules, 2, NOW as i64))
+        .schedule_rules(Some(1), change(rules, 2, (NOW + 1) as i64))
         .await
         .unwrap();
-    let period = policy.record_epoch_settings(KEY, NOW).await.unwrap();
+    let period = policy.record_epoch_settings(KEY, NOW + 1).await.unwrap();
     assert_eq!(period.period_seconds, 100);
     assert!(
         policy

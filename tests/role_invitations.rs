@@ -59,7 +59,7 @@ async fn foreign_target_and_transferable_root_board_role_are_not_signed() {
     for (community, purpose, until) in [
         ("foreign", Purpose::BootstrapRoot, NOW + 100),
         (COMMUNITY, Purpose::RootBoardMember, NOW + 100),
-        (COMMUNITY, Purpose::FounderAdmin, NOW),
+        (COMMUNITY, Purpose::FounderAdmin, cplc::day(NOW)),
     ] {
         assert!(
             policy
