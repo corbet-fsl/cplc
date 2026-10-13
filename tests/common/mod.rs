@@ -401,7 +401,7 @@ pub async fn voucher_request(
     for (at, byte) in seed.bytes().enumerate() {
         entropy[at % 32] ^= byte;
     }
-    let (token, _) = Token::issue(entropy, [7; 32]).unwrap();
+    let (token, _) = Token::issue(entropy, [7; 32], [5; 32]).unwrap();
     let options = Options::new(1, valid_for, None, false).unwrap();
     let link = Link::issue(&token.registration(), community, options, now).unwrap();
     links.insert(link).await.unwrap();
