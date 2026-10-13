@@ -245,6 +245,10 @@ pub struct TrustManifest {
     /// Required common root-board publication floor after configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_board_revision: Option<u64>,
+    /// Oblivious HTTP relay and gateway key entries (several during a
+    /// rotation overlap). Absent when the community does not use OHTTP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ohttp: Option<cblv::keys::Directory>,
 }
 /// Domain separation for the signed manifest payload.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

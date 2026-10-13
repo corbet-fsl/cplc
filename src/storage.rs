@@ -49,6 +49,9 @@ pub struct StoredPolicy {
     pub(crate) root_board_cohort: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_transitions: Vec<cbcn::KeyTransition>,
+    /// Oblivious HTTP relay and gateway keys, published in the signed manifest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ohttp: Option<cblv::keys::Directory>,
 }
 
 // Seven independently bounded COSE publications, each encoded as JSON byte
@@ -100,6 +103,9 @@ impl StoredPolicy {
                 return Err(Error::Corrupt);
             }
             schema.validate_definition().map_err(|_| Error::Corrupt)?;
+        }
+        if let Some(directory) = &self.ohttp {
+            directory.clone().verify().map_err(|_| Error::Corrupt)?;
         }
         if self.schema_versions.len() > MAX_ENTRIES {
             return Err(Error::Corrupt);

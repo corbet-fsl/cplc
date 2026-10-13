@@ -1026,3 +1026,74 @@ async fn publish_schema_versions_with_the_original_change_classifications() {
     );
     assert!(policy.set_schema(schema(1)).await.is_err());
 }
+
+#[tokio::test]
+async fn ohttp_directory_travels_in_the_signed_manifest_and_rotates_with_overlap() {
+    let key = |id: u8, from: u64, to: u64| cblv::keys::PublishedKey {
+        service: "api.example".into(),
+        key_id: id,
+        config: ohttp_config(id),
+        not_before: from,
+        not_after: to,
+    };
+    let mut policy = memory().await;
+    let manifest = |bytes: Vec<u8>, policy: &Policy<_, _, _>| -> TrustManifest {
+        let verified = policy
+            .key_ring()
+            .unwrap()
+            .verify(&bytes, csgn::Kind::SettingsSnapshot, NOW)
+            .unwrap();
+        serde_json::from_slice(verified.payload()).unwrap()
+    };
+    let before = policy.trust_manifest(NOW).await.unwrap();
+    assert!(manifest(before, &policy).ohttp.is_none());
+    let one = cblv::keys::Directory {
+        relay: "https://relay.example".into(),
+        keys: vec![key(1, NOW, NOW + 1000)],
+    };
+    policy.set_ohttp(Some(one.clone())).await.unwrap();
+    let published = policy.trust_manifest(NOW).await.unwrap();
+    assert_eq!(manifest(published, &policy).ohttp, Some(one));
+    let overlap = cblv::keys::Directory {
+        relay: "https://relay.example".into(),
+        keys: vec![key(1, NOW, NOW + 1000), key(2, NOW + 500, NOW + 2000)],
+    };
+    policy.set_ohttp(Some(overlap.clone())).await.unwrap();
+    let published = policy.trust_manifest(NOW).await.unwrap();
+    assert_eq!(manifest(published, &policy).ohttp, Some(overlap));
+    // Unsafe directories never enter the signed state.
+    let bad_relay = cblv::keys::Directory {
+        relay: "http://relay.example".into(),
+        keys: vec![key(3, NOW, NOW + 10)],
+    };
+    assert!(matches!(
+        policy.set_ohttp(Some(bad_relay)).await,
+        Err(Error::Invalid(_))
+    ));
+    let mut wrong = key(4, NOW, NOW + 10);
+    wrong.key_id = 5;
+    let bad_key = cblv::keys::Directory {
+        relay: "https://relay.example".into(),
+        keys: vec![wrong],
+    };
+    assert!(matches!(
+        policy.set_ohttp(Some(bad_key)).await,
+        Err(Error::Invalid(_))
+    ));
+    policy.set_ohttp(None).await.unwrap();
+}
+
+fn ohttp_config(id: u8) -> Vec<u8> {
+    ohttp::KeyConfig::derive(
+        id,
+        ohttp::hpke::Kem::X25519Sha256,
+        vec![ohttp::SymmetricSuite::new(
+            ohttp::hpke::Kdf::HkdfSha256,
+            ohttp::hpke::Aead::ChaCha20Poly1305,
+        )],
+        &[id; 32],
+    )
+    .unwrap()
+    .encode()
+    .unwrap()
+}

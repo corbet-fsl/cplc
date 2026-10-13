@@ -61,6 +61,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             root_board: None,
             root_board_issuer: None,
             root_board_cohort: None,
+            ohttp: None,
             key_transitions: Vec::new(),
         };
         store.compare_exchange(None, &state).await?;
@@ -373,6 +374,22 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         self.commit(next).await
     }
 
+    /// Replace the Oblivious HTTP directory carried in the signed trust manifest.
+    /// Rotation is a new directory holding the old and the new key entries until
+    /// the old one ends. Entries are checked here as well as on every load; the
+    /// epoch is not advanced, so member sessions are unaffected.
+    pub async fn set_ohttp(&mut self, directory: Option<cblv::keys::Directory>) -> Result<()> {
+        if let Some(directory) = &directory {
+            directory
+                .clone()
+                .verify()
+                .map_err(|_| Error::Invalid("ohttp directory"))?;
+        }
+        let mut next = self.current().await?.clone();
+        next.ohttp = directory;
+        self.commit(next).await
+    }
+
     /// Replace current community revocations and advance the epoch immediately.
     /// Global suspension belongs exclusively to cgbl.
     pub async fn set_revocations(&mut self, revocations: Revocations) -> Result<()> {
@@ -498,6 +515,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 .balance
                 .as_ref()
                 .map(|publication| publication.revision),
+            ohttp: state.ohttp.clone(),
         };
         let until = self
             .validity_limit(now, state.config.snapshot_validity, &active)

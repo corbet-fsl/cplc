@@ -18,6 +18,7 @@ cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main" }
 cpsd = { git = "https://git.corbet.ch/corbet-foss/cpsd", branch = "main" }
 cgts = { git = "https://git.corbet.ch/corbet-libs/cgts", branch = "main" }
 crbk = { git = "https://git.corbet.ch/corbet-foss/crbk", branch = "main" }
+cblv = { git = "https://git.corbet.ch/corbet-foss/cblv.git", branch = "main" }
 crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", features = ["libsql"] }
 cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main" }
@@ -27,6 +28,7 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+ohttp = { version = "0.8", default-features = false, features = ["rust-hpke"] }
 sha2 = "0.10"
 webauthn-authenticator-rs = { version = "0.5.5", default-features = false, features = ["softtoken"] }
 ed25519-dalek = "3"

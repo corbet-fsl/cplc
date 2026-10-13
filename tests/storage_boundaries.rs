@@ -42,7 +42,7 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
     assert_eq!(old.community(), COMMUNITY);
     assert!(old.epoch() > 0);
     let base = serde_json::to_value(&old).unwrap();
-    for case in 0..27 {
+    for case in 0..28 {
         let mut next = base.clone();
         next["revision"] = json!(old.revision() + 1);
         match case {
@@ -94,10 +94,11 @@ async fn actual_memory_store_rejects_each_corrupt_document_boundary() {
             23 => next["schema_versions"] = json!(vec![next["schema_versions"][0].clone(); 2]),
             24 => next["key_transitions"] = json!([{"revision":0,"proof":[1]}]),
             25 => next["key_transitions"] = json!([{"revision":1,"proof":[]}]),
-            _ => {
+            26 => {
                 next["key_transitions"] =
                     json!([{"revision":1,"proof":vec![0u8; cbcn::MAX_KEY_TRANSITION_BYTES + 1]}]);
             }
+            _ => next["ohttp"] = json!({"relay":"http://relay.example","keys":[]}),
         }
         let next: StoredPolicy = serde_json::from_value(next).unwrap();
         assert!(
