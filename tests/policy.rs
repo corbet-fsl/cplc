@@ -1046,21 +1046,33 @@ async fn ohttp_directory_travels_in_the_signed_manifest_and_rotates_with_overlap
         serde_json::from_slice(verified.payload()).unwrap()
     };
     let before = policy.trust_manifest(NOW).await.unwrap();
-    assert!(manifest(before, &policy).ohttp.is_none());
+    let before = manifest(before, &policy);
+    assert!(before.ohttp.is_none());
     let one = cblv::keys::Directory {
         relay: "https://relay.example".into(),
         keys: vec![key(1, NOW, NOW + 1000)],
     };
     policy.set_ohttp(Some(one.clone())).await.unwrap();
     let published = policy.trust_manifest(NOW).await.unwrap();
-    assert_eq!(manifest(published, &policy).ohttp, Some(one));
+    let first = manifest(published, &policy);
+    assert_eq!(first.ohttp, Some(one));
+    // Every change of the entry is a new signed publication with a higher
+    // sequence, so a client holding the newer one refuses the older.
+    assert!(first.revision > before.revision);
     let overlap = cblv::keys::Directory {
         relay: "https://relay.example".into(),
         keys: vec![key(1, NOW, NOW + 1000), key(2, NOW + 500, NOW + 2000)],
     };
     policy.set_ohttp(Some(overlap.clone())).await.unwrap();
     let published = policy.trust_manifest(NOW).await.unwrap();
-    assert_eq!(manifest(published, &policy).ohttp, Some(overlap));
+    let rotated = manifest(published, &policy);
+    assert_eq!(rotated.ohttp, Some(overlap));
+    assert!(rotated.revision > first.revision);
+    // Withdrawing the entry is a change too.
+    policy.set_ohttp(None).await.unwrap();
+    let withdrawn = manifest(policy.trust_manifest(NOW).await.unwrap(), &policy);
+    assert!(withdrawn.ohttp.is_none());
+    assert!(withdrawn.revision > rotated.revision);
     // Unsafe directories never enter the signed state.
     let bad_relay = cblv::keys::Directory {
         relay: "http://relay.example".into(),
