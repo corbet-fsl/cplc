@@ -31,7 +31,6 @@ thiserror = "2"
 ohttp = { version = "0.8", default-features = false, features = ["rust-hpke"] }
 sha2 = "0.10"
 webauthn-authenticator-rs = { version = "0.5.5", default-features = false, features = ["softtoken"] }
-ed25519-dalek = "3"
 libsql = { version = "0.9", default-features = false, features = ["core"] }
 clbs = { git = "https://git.corbet.ch/corbet-foss/clbs", branch = "main" }
 rand = "0.8"

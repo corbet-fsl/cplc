@@ -734,7 +734,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#3ff7de1ccd1744440049bc63f502a3e0e4be2a8e"
+source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#cc7df15f97aa380c08c34eefcc2c5b716046330f"
 dependencies = [
  "csgn",
  "serde",
@@ -744,7 +744,7 @@ dependencies = [
 [[package]]
 name = "cblc"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#1589a3a40557f74e0d1bc8bd0e594cd64845c840"
+source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#ae1f885db75f64f75ceb7018c98fe168dc52159a"
 dependencies = [
  "cbcn",
  "cmbl",
@@ -844,7 +844,7 @@ dependencies = [
 [[package]]
 name = "cgts"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-libs/cgts?branch=main#ac9cb9a5777de8c06580d3239a4222baa81c295f"
+source = "git+https://git.corbet.ch/corbet-libs/cgts?branch=main#06334dcc6feff0bc283221545e1e68a68999ebb4"
 dependencies = [
  "cblc",
  "cgrd",
@@ -1005,7 +1005,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#98a33ea9b95f96e872f577820a6047be902a1a44"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#1f35359af7c4874a8773ebc756579088f86131e1"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -1135,7 +1135,6 @@ dependencies = [
  "cshm",
  "cvch",
  "data-encoding",
- "ed25519-dalek 3.0.0",
  "libsql",
  "ohttp",
  "rand 0.8.8",
@@ -1178,7 +1177,7 @@ dependencies = [
 [[package]]
 name = "cpsd"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cpsd?branch=main#3a9c9c13715313620ec8c1a1b8a1f6c8084e56c4"
+source = "git+https://git.corbet.ch/corbet-foss/cpsd?branch=main#907b0a6264be4df6f31898cb89f31a68ad3ef04b"
 dependencies = [
  "ark-bls12-381",
  "ark-ec 0.4.2",
@@ -1321,7 +1320,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#427b82cdbce26e7226fb444caf4b6c505d691c0f"
+source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#feccff8c54c66844aa668e701812b01d43c6c999"
 dependencies = [
  "ciborium-ll",
  "coset 0.4.2",
@@ -1436,13 +1435,15 @@ dependencies = [
 [[package]]
 name = "cvch"
 version = "0.2.1"
-source = "git+https://git.corbet.ch/corbet-foss/cvch?branch=main#7cb895c09b712f55d360c88cbf89dd21f2292dd7"
+source = "git+https://git.corbet.ch/corbet-foss/cvch?branch=main#e331a10aa08fba61960ef4e605bd725e46a006d6"
 dependencies = [
  "cfbk",
  "csgn",
  "ed25519-dalek 3.0.0",
+ "getrandom 0.4.3",
  "hex",
  "hmac 0.13.0",
+ "hpke",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -1465,7 +1466,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#20a60821a96d46d0f57b9f5de6f5e7c8b5a73a3c"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#23d8b4a17a20d69f9d538eb5841e109bc1498af3"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.6.0",
@@ -4783,7 +4784,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",

@@ -2,7 +2,6 @@
 mod common;
 use common::*;
 use cplc::*;
-use ed25519_dalek::{Signer, SigningKey};
 
 fn requirement_for(provider: &str) -> crbk::Requirement {
     crbk::Requirement {
@@ -53,24 +52,14 @@ async fn authenticated_providers_of_one_gate_can_issue_without_inflating_thresho
         action: "admit",
         now: NOW as i64,
     };
-    let sponsor = SigningKey::from_bytes(&[7; 32]);
+    let links = std::sync::Arc::new(cvch::link::MemoryLinks::default());
     for provider in ["first", "second"] {
-        let binding = cvch::member_binding(&cvch::receipt_id(provider), MEMBER.as_bytes());
-        let expiry = NOW + 100;
-        let voucher = cvch::Voucher {
-            member_binding: binding.clone(),
-            id: provider.into(),
-            valid_until: expiry,
-            signature: sponsor
-                .sign(&cvch::issuance_bytes(provider, expiry, COMMUNITY, &binding))
-                .to_bytes()
-                .to_vec(),
-        };
+        let request = voucher_request(&links, COMMUNITY, MEMBER, provider, NOW, 100).await;
         keeper
             .run(
                 context,
-                &cgts::gates::VoucherGate::new(provider, sponsor.verifying_key()).unwrap(),
-                &voucher,
+                &cgts::gates::VoucherGate::new(provider, links.clone()).unwrap(),
+                &request,
             )
             .await
             .unwrap();

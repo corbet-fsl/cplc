@@ -385,3 +385,30 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> TestPolicyApi for Policy<R, S
         self.may(&snapshot, subject, action, &gates, now).await
     }
 }
+
+/// A single-use cvch link issued at `now` and valid for `valid_for` seconds, and
+/// the request that redeems it for `member`.
+pub async fn voucher_request(
+    links: &std::sync::Arc<cvch::link::MemoryLinks>,
+    community: &str,
+    member: &str,
+    seed: &str,
+    now: u64,
+    valid_for: u64,
+) -> cvch::link::Request {
+    use cvch::link::{Link, LinkStore, Notice, Options, Request, Token};
+    let mut entropy = [1u8; 32];
+    for (at, byte) in seed.bytes().enumerate() {
+        entropy[at % 32] ^= byte;
+    }
+    let (token, _) = Token::issue(entropy, [7; 32]).unwrap();
+    let options = Options::new(1, valid_for, None, false).unwrap();
+    let link = Link::issue(&token.registration(), community, options, now).unwrap();
+    links.insert(link).await.unwrap();
+    let notice = Notice {
+        member: member.into(),
+        nonce: [3; 16],
+        handle: None,
+    };
+    Request::new(&token, &notice).unwrap()
+}

@@ -2,7 +2,6 @@
 mod common;
 use common::*;
 use cplc::*;
-use ed25519_dalek::{Signer, SigningKey};
 
 async fn fixture() -> (MemoryPolicy, VerifiedSnapshot, cgts::CheckedGates) {
     let mut rules = book(crbk::ActionPolicy {
@@ -45,24 +44,13 @@ async fn fixture() -> (MemoryPolicy, VerifiedSnapshot, cgts::CheckedGates) {
         action: "admit",
         now: NOW as i64,
     };
-    let sponsor = SigningKey::from_bytes(&[7; 32]);
-    let id = "actual-original-voucher";
-    let binding = cvch::member_binding(&cvch::receipt_id(id), MEMBER.as_bytes());
-    let expires = NOW + 2;
-    let voucher = cvch::Voucher {
-        member_binding: binding.clone(),
-        id: id.into(),
-        valid_until: expires,
-        signature: sponsor
-            .sign(&cvch::issuance_bytes(id, expires, COMMUNITY, &binding))
-            .to_bytes()
-            .to_vec(),
-    };
+    let links = std::sync::Arc::new(cvch::link::MemoryLinks::default());
+    let request = voucher_request(&links, COMMUNITY, MEMBER, "actual-original-voucher", NOW, 2).await;
     keeper
         .run(
             context,
-            &cgts::gates::VoucherGate::new("invitation", sponsor.verifying_key()).unwrap(),
-            &voucher,
+            &cgts::gates::VoucherGate::new("invitation", links.clone()).unwrap(),
+            &request,
         )
         .await
         .unwrap();
