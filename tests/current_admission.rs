@@ -45,7 +45,8 @@ async fn fixture() -> (MemoryPolicy, VerifiedSnapshot, cgts::CheckedGates) {
         now: NOW as i64,
     };
     let links = std::sync::Arc::new(cvch::link::MemoryLinks::default());
-    let request = voucher_request(&links, COMMUNITY, MEMBER, "actual-original-voucher", NOW, 2).await;
+    let request =
+        voucher_request(&links, COMMUNITY, MEMBER, "actual-original-voucher", NOW, 2).await;
     keeper
         .run(
             context,
