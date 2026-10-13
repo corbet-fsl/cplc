@@ -223,6 +223,12 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         Ok(snapshot)
     }
 
+    /// The rulebook in force at a trusted time: catalogue, platform rows and
+    /// community deviations. Read-only; for settings screens.
+    pub async fn rulebook(&self, now: u64) -> Result<crbk::Rulebook> {
+        Ok(self.active(now).await?.change.rulebook)
+    }
+
     /// Append a prospective rulebook change through crbk. Caller authorization
     /// and notice delivery are service duties. Epochs increase on each revision.
     pub async fn schedule_rules(
@@ -239,6 +245,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
             return Err(Error::Invalid("policy epoch must advance by one"));
         }
         crbk::define_membership_settings(&mut change.rulebook)?;
+        crbk::define_platform_settings(&mut change.rulebook)?;
         cgts::gates::define_settings(&mut change.rulebook)
             .map_err(|_| Error::Invalid("gate settings"))?;
         change.rulebook.validate()?;
