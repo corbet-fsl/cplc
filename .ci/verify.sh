@@ -8,6 +8,7 @@ trap 'result=$?; for report in coverage.json coverage.lcov coverage.txt; do if [
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-never}"
 
+bash .ci/update-our-crates.sh
 cargo metadata --locked --format-version 1 > dependency-metadata.json
 python3 .github/test-check-source-coverage.py
 python3 .ci/test-provider-controls.py
