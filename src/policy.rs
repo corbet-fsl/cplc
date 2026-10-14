@@ -254,6 +254,22 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         Ok(self.active(now).await?.change.rulebook)
     }
 
+    /// Announced revisions not yet in force at a trusted time, soonest first
+    /// (at most `limit`). Read-only; for notices such as the lobby.
+    pub async fn upcoming(&self, now: u64, limit: usize) -> Result<Vec<crbk::Revision>> {
+        let community = self.state()?.community.clone();
+        let mut next = self.active(now).await?.revision;
+        let mut pending = Vec::new();
+        while pending.len() < limit {
+            next = next_counter(next)?;
+            match self.rules.load(&community, Selection::Revision(next)).await? {
+                Some(revision) => pending.push(revision),
+                None => break,
+            }
+        }
+        Ok(pending)
+    }
+
     /// Append a prospective rulebook change through crbk. Caller authorization
     /// and notice delivery are service duties. Epochs increase on each revision.
     pub async fn schedule_rules(
