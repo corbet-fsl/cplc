@@ -623,6 +623,16 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
                 now: timestamp(checked_at)?,
             })
             .map_err(|_| Error::Verification)?;
+        // Root is a platform role carried by the global passport, not a seat made
+        // by the server: a verified, unexpired global `root` result for this very
+        // subject satisfies the admission gates of every community. The legal veto
+        // and the revocation check above still apply; the root enrols on first visit.
+        if crate::types::holds_root_role(action, subject.id, &gates, timestamp(now)?) {
+            return Ok(crbk::Decision {
+                allowed: true,
+                missing: Vec::new(),
+            });
+        }
         Ok(snapshot
             .settings()
             .may(subject, action, &gates, timestamp(now)?)?)

@@ -298,3 +298,162 @@ pub struct SchemaVersions {
     /// Ordered by increasing schema version, with no member information.
     pub versions: Vec<SchemaVersion>,
 }
+
+/// Why a community's key chain ended, as the public feed states it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndReasonClass {
+    /// The community's admins dissolved it.
+    Dissolved,
+    /// The platform ended it (legal order, terms, name dispute).
+    Banned,
+}
+
+/// One end-of-chain statement of the platform feed: a member device that pins this
+/// founding fingerprint deletes its local data of that community. No names and no
+/// member information; the wire shape is the one `cchr::Ended` verifies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EndedChain {
+    /// SHA-256 of the ended community's genesis document, lowercase hex on the wire.
+    #[serde(with = "hex_fingerprint")]
+    pub fingerprint: [u8; 32],
+    /// Dissolved by its admins, or ended by the platform.
+    pub reason_class: EndReasonClass,
+    /// Unix seconds at which the chain ended.
+    pub ended_at: u64,
+}
+
+/// End-of-chain statements older than this are no longer published (one year).
+pub const ENDED_RETENTION_SECONDS: u64 = 366 * 86_400;
+
+/// The Communities snapshot content: the plain list while nothing ended, else the
+/// detailed object with the ended chains (at most [`MAX_ENTRIES`], newest first
+/// kept, nothing older than [`ENDED_RETENTION_SECONDS`] before `now`).
+pub fn communities_content(
+    communities: &BTreeSet<String>,
+    ended: &[EndedChain],
+    now: u64,
+) -> serde_json::Value {
+    let mut kept: Vec<EndedChain> = ended
+        .iter()
+        .copied()
+        .filter(|entry| entry.ended_at.saturating_add(ENDED_RETENTION_SECONDS) > now)
+        .collect();
+    kept.sort_by_key(|entry| std::cmp::Reverse(entry.ended_at));
+    kept.truncate(MAX_ENTRIES);
+    if kept.is_empty() {
+        return serde_json::json!(communities);
+    }
+    serde_json::json!({ "communities": communities, "ended": kept })
+}
+
+mod hex_fingerprint {
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(value: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error> {
+        let text: String = value.iter().map(|byte| format!("{byte:02x}")).collect();
+        serializer.serialize_str(&text)
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[u8; 32], D::Error> {
+        let text = String::deserialize(deserializer)?;
+        let bad = || serde::de::Error::custom("fingerprint");
+        if text.len() != 64 || !text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(bad());
+        }
+        let mut out = [0u8; 32];
+        for (i, byte) in out.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&text[2 * i..2 * i + 2], 16).map_err(|_| bad())?;
+        }
+        Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod ended_tests {
+    use super::*;
+
+    fn entry(byte: u8, at: u64) -> EndedChain {
+        EndedChain {
+            fingerprint: [byte; 32],
+            reason_class: EndReasonClass::Banned,
+            ended_at: at,
+        }
+    }
+
+    #[test]
+    fn nothing_ended_keeps_the_plain_list() {
+        let names = BTreeSet::from(["a".to_owned()]);
+        assert_eq!(
+            communities_content(&names, &[], 10),
+            serde_json::json!(["a"])
+        );
+    }
+
+    #[test]
+    fn ended_chains_use_the_detailed_shape_and_expire() {
+        let names = BTreeSet::from(["a".to_owned()]);
+        let old = entry(1, 1);
+        let fresh = entry(2, ENDED_RETENTION_SECONDS + 5);
+        let content = communities_content(&names, &[old, fresh], ENDED_RETENTION_SECONDS + 10);
+        assert_eq!(content["ended"].as_array().unwrap().len(), 1);
+        assert_eq!(content["ended"][0]["fingerprint"], "02".repeat(32));
+        assert_eq!(content["ended"][0]["reason_class"], "banned");
+        let back: EndedChain = serde_json::from_value(content["ended"][0].clone()).unwrap();
+        assert_eq!(back, fresh);
+    }
+}
+
+/// Gate id of the platform role Root in the global passport.
+pub const ROOT_ROLE_GATE: &str = "root";
+/// The admission action the Root role satisfies in every community (the action
+/// name `cmty::ADMISSION_ACTION`).
+pub const ROOT_ADMISSION_ACTION: &str = "community.admit";
+
+/// Whether the verified results carry the Root role for `subject` at `now`:
+/// only the admission action, only a global-level result, only this subject.
+pub(crate) fn holds_root_role(
+    action: &str,
+    subject: &str,
+    results: &[crbk::GateResult],
+    now: i64,
+) -> bool {
+    action == ROOT_ADMISSION_ACTION
+        && results.iter().any(|result| {
+            result.gate == ROOT_ROLE_GATE
+                && result.level == crbk::GateLevel::Global
+                && result.subject == subject
+                && result.valid_until > now
+        })
+}
+
+#[cfg(test)]
+mod root_role_tests {
+    use super::*;
+
+    fn result(gate: &str, level: crbk::GateLevel, subject: &str, until: i64) -> crbk::GateResult {
+        crbk::GateResult {
+            gate: gate.into(),
+            level,
+            subject: subject.into(),
+            community: (level == crbk::GateLevel::Community).then(|| "c".into()),
+            provider: "p".into(),
+            valid_until: until,
+            proven_at: None,
+        }
+    }
+
+    #[test]
+    fn only_a_current_global_root_result_for_the_subject_on_admission_counts() {
+        use crbk::GateLevel::{Community, Global};
+        let root = [result("root", Global, "me", 100)];
+        assert!(holds_root_role(ROOT_ADMISSION_ACTION, "me", &root, 99));
+        assert!(!holds_root_role(ROOT_ADMISSION_ACTION, "me", &root, 100));
+        assert!(!holds_root_role(ROOT_ADMISSION_ACTION, "you", &root, 1));
+        assert!(!holds_root_role("other", "me", &root, 1));
+        // A community-level gate that merely carries the name is no role.
+        let fake = [result("root", Community, "me", 100)];
+        assert!(!holds_root_role(ROOT_ADMISSION_ACTION, "me", &fake, 1));
+        let other = [result("voucher", Global, "me", 100)];
+        assert!(!holds_root_role(ROOT_ADMISSION_ACTION, "me", &other, 1));
+    }
+}
