@@ -409,6 +409,7 @@ pub async fn voucher_request(
         member: member.into(),
         nonce: [3; 16],
         handle: None,
+        key_package: Vec::new(),
     };
     Request::new(&token, &notice).unwrap()
 }
