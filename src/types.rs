@@ -53,7 +53,7 @@ pub enum SnapshotKind {
     SchemaVersions,
     /// Explicitly supplied public community identifiers, never memberships.
     Communities,
-    /// Current community revocations, never global suspension data.
+    /// Current community revocations, never global burn data.
     RevocationList,
 }
 
