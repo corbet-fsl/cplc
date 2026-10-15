@@ -4,7 +4,7 @@
 
 Policy facade over `crbk` (rulebook), `cshm` (profile schema) and `csgn`
 (community signing keys), under `cmty` in cvld v0.4. Policy reaches the global
-service only as signed snapshots. Global issuance, keys, suspension and databases
+service only as signed snapshots. Global issuance, keys, blocks and databases
 remain separate. Rust on current stable; FSL-1.1-ALv2; no registry publication.
 No own cryptographic primitives. No login dates, request logs or raw gate data.
 Use maintained leaves on main with one exact locked revision each. Storage goes through `crlt`, with one
@@ -239,7 +239,7 @@ The global policy format consumed by cgbl is signed by the separate authenticate
 global policy authority described in cgbl's contract. A community signer never
 signs global policy or claims global issuance authority. Every credential renewal
 requiring global gates needs a fresh cpsd presentation verified against the
-current authenticated global epoch; a suspension prevents its next renewal.
+current authenticated global epoch; a block prevents its next renewal.
 
 `Policy::sign_presentation_request` signs only a typed cpsd presentation request
 for the policy's own community, with a deadline at most 300 seconds ahead.
