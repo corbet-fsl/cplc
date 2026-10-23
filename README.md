@@ -81,7 +81,6 @@ the service/consumers. The [contract](docs/CONTRACT.md) details failure recovery
 All Cargo commands run in CI with current stable Rust:
 `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`,
 `cargo test`. CI retains its resolved dependency lock as an artifact.
-No Cargo command runs on the workstation.
 
 Tests use actual leaves, deterministic synthetic metadata, an in-memory backend
 and real local libSQL files. The development gate exists only in tests: no paid
