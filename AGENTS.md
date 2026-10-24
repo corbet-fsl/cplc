@@ -14,7 +14,7 @@ Write all code comments and documentation in English.
 ## Quality boundary
 
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` must pass.
-- Do not run Cargo on the workstation, including formatting or metadata. Push to Forgejo and validate committed source with Crow repository jobs; read results with `ci-job status` / `ci-job logs`.
+- Do not run Cargo locally, including formatting or metadata. Push to Forgejo and validate committed source with Crow repository jobs; read results with `ci-job status` / `ci-job logs`.
 - Tests: real round trips with libSQL (local file or in-memory), no mocks of our own logic; ample edge cases.
 - Commits: plain English, imperative; no AI attribution. Never publish to a registry.
 
