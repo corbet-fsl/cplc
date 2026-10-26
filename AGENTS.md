@@ -1,23 +1,42 @@
-# Agent instructions
+# cplc agent instructions
 
-Write all code comments and documentation in English.
+Write all code comments and documentation in English. Owned code forbids unsafe
+Rust (`#![forbid(unsafe_code)]`, `src/lib.rs:4`).
 
-## Product boundary
+## Build and test (lane: `~/agents/scratch/cbuild <lane> ...`)
 
-- Policy facade of cvld: rulebook, profile schema and signing.
-- Read docs/CONTRACT.md before changing public boundaries.
-- **Search before you write**: survey maintained crates first; prefer a thin facade over an established library; record candidates, choice and reasons in the README.
-- No own cryptographic primitives. No login dates, no request logs, no raw gate data.
-- Storage only through `crlt` (Turso/libSQL); one database per community with a community key in every table; every query index-backed.
-- This crate is FSL-1.1-ALv2. Do not add dependencies available only under GPL or AGPL.
+- `fmt -p cplc -- --check`
+- `test -p cplc --no-fail-fast`
+  (22 targets green + turso 1 ignored without `TURSO_URL`/`TURSO_TOKEN` + doc 2,
+  exit 0; `--locked` needs CI's resolve refresh)
+- `clippy -p cplc --all-targets -- -D warnings`
+  (lane: blocked by pre-existing upstream `cblc` `too_many_arguments` at
+  `cblc/src/accounting_ledger/extensions.rs:140`, red-at-HEAD, outside this repo;
+  cplc's own code is warning-free)
+- No wasm target: `check -p cplc --target wasm32-unknown-unknown` fails inside
+  `mio` (unsupported); CI (`.ci/verify.sh`) does not run it either.
+- CI-only (Crow): `provider-controls.py` / `test-provider-controls.py`,
+  nightly `llvm-cov` strict gate (`docs/COVERAGE.md`)
 
-## Quality boundary
+## Hard invariants (each with its enforcing test in `tests/`)
 
-- `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` must pass.
-- Do not run Cargo locally, including formatting or metadata. Push to Forgejo and validate committed source with Crow repository jobs; read results with `ci-job status` / `ci-job logs`.
-- Tests: real round trips with libSQL (local file or in-memory), no mocks of our own logic; ample edge cases.
-- Commits: plain English, imperative; no AI attribution. Never publish to a registry.
+- Read `docs/CONTRACT.md` before changing public boundaries.
+- `CredentialRequest` is never a member-facing endpoint; `may`/`issue` evaluate
+  the configured action themselves and never accept a caller verdict
+  (`docs/CONTRACT.md:24-29`): `tests/policy.rs::signed_action_attests_the_real_configured_decision`,
+  `tests/credential_format.rs::signed_format_never_defaults_an_absent_version_or_action`.
+- Credentials bind the exact issuance action and cover their whole lifetime;
+  revoked/expired/foreign state fails closed (`docs/CONTRACT.md:74-86,101-115`):
+  `tests/admission_v3.rs::*`, `tests/current_admission.rs::*`, `tests/membership_facts.rs::*`.
+- Epochs only increase; revocation never masks a later scheduled transition
+  (`docs/CONTRACT.md:46-52`): `tests/configuration.rs::*`, `tests/key_continuity.rs::*`.
+- Failed publication never returns a signature; uncertain writes disable the
+  facade until reopen, never auto-retry (`docs/CONTRACT.md:133-135`):
+  `tests/beacon.rs::*`, `tests/database.rs::real_database_failure_after_signing_returns_no_publication`,
+  `tests/storage_boundaries.rs::*`.
+- Signing secrets, credentials and member history are never stored; Debug output
+  is redacted (`docs/CONTRACT.md:86,125-126,148`):
+  `tests/database.rs::issuance_keeps_no_member_credential_or_activity_record`.
+- FSL-1.1-ALv2; no GPL/AGPL-only dependencies (`LICENSE.md`, `deny.toml`).
 
-- First-party Git dependencies follow branch main; resolve one full locked revision per crate.
-- Dependency updates require protected exact-candidate substantive CI and full line/branch coverage.
-- Stage explicit paths, pull with rebase before pushing, and never force-push.
+Pointers: `docs/CONTRACT.md`, `docs/COVERAGE.md`.
