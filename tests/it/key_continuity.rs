@@ -1,5 +1,5 @@
 //! Original csgn proofs survive actual durable-owner handoff and process reopen.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use serde_json::json;

@@ -1,6 +1,6 @@
 //! Committed policy reads under a real original writer, without member or proof
 //! authority claims. The pause only controls when the real storage CAS commits.
-mod common;
+use crate::common;
 
 use cplc::{Error, LibsqlStore, Storage, StoredPolicy, crbk, crlt};
 use serde_json::json;

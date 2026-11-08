@@ -1,5 +1,5 @@
 //! Original signed voucher receipts retain their timestamp at a later owner cut.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 

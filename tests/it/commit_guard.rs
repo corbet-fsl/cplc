@@ -1,6 +1,6 @@
 #![cfg(not(target_arch = "wasm32"))]
 //! Actual policy SQL transactions; these cuts test persistence, not member proofs.
-mod common;
+use crate::common;
 use common::*;
 use cplc::{
     crbk::{CommitGuard, Storage as _},

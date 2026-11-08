@@ -1,5 +1,5 @@
 //! Real policy stores reject corrupted documents and invalid transitions.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use serde_json::{Value, json};

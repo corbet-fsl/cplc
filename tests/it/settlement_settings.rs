@@ -1,5 +1,5 @@
 //! Actual active Rulebook and original signed settings; no quota from a request.
-mod common;
+use crate::common;
 use common::*;
 use cplc::{crbk::OutcomeQuotaSettings, *};
 use serde_json::json;

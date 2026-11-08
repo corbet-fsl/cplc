@@ -1,5 +1,5 @@
 //! Real signer/configuration and authenticated snapshot boundary refusals.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use serde_json::{Value, json};

@@ -1,5 +1,5 @@
 //! Original root-board producer and authenticated consumer scenarios.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use cpsd::rand::{SeedableRng, rngs::StdRng};

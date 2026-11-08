@@ -1,5 +1,5 @@
 //! Canonical activated-issuer material through the real durable Policy/Beacon path.
-mod common;
+use crate::common;
 use cblc::publication::PublicVerifierMaterial;
 use common::*;
 use cplc::*;
@@ -7,7 +7,7 @@ use serde_json::Value;
 
 fn fixture_material() -> PublicVerifierMaterial {
     let fixture: Value =
-        serde_json::from_slice(include_bytes!("fixtures/balance-material-v2.json")).unwrap();
+        serde_json::from_slice(include_bytes!("../fixtures/balance-material-v2.json")).unwrap();
     let ring = csgn::KeyRing::from_cbor(
         &serde_json::from_value::<Vec<u8>>(fixture["configuredFixtureRing"].clone()).unwrap(),
     )
@@ -24,7 +24,7 @@ fn fixture_material() -> PublicVerifierMaterial {
 #[test]
 fn genuine_legacy_signature_does_not_supply_required_v2_admission_authority() {
     let fixture: Value =
-        serde_json::from_slice(include_bytes!("fixtures/balance-material.json")).unwrap();
+        serde_json::from_slice(include_bytes!("../fixtures/balance-material.json")).unwrap();
     let ring = csgn::KeyRing::from_cbor(
         &serde_json::from_value::<Vec<u8>>(fixture["configuredFixtureRing"].clone()).unwrap(),
     )

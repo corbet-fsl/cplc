@@ -1,5 +1,5 @@
 //! Issuance derives lifetime and eligibility from the authoritative source.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 

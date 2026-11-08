@@ -1,5 +1,5 @@
 //! Signed wallet challenges use the published community key ring.
-mod common;
+use crate::common;
 use common::*;
 use cplc::{DAY, cpsd, csgn};
 use rand::{SeedableRng, rngs::StdRng};

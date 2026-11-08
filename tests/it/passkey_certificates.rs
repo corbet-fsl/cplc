@@ -1,5 +1,5 @@
 //! Original Keyhole registration projected through the actual Policy signer.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};

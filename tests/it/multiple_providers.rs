@@ -1,5 +1,5 @@
 //! Real signed vouchers retain provider-specific facts through credential issuance.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 

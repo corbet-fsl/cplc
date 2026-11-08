@@ -1,5 +1,5 @@
 //! Versioned admission decisions and migration through the real storage owners.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use serde_json::{Value, json};

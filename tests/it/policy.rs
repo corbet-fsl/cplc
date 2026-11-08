@@ -1,6 +1,6 @@
 //! Policy facade round trips and adversarial inputs through the real leaves.
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeSet;
 

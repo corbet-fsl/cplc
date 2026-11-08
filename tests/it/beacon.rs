@@ -1,5 +1,5 @@
 //! Real Beacon publication and durable writer-fence tests.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 

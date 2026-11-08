@@ -1,5 +1,5 @@
 //! Real signed publications and legacy SQL documents exercise owner boundaries.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use serde_json::json;

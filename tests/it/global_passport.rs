@@ -1,5 +1,5 @@
 //! Real global evidence affects cplc's decision but never enters the credential.
-mod common;
+use crate::common;
 use common::*;
 use cplc::*;
 use rand::{SeedableRng, rngs::StdRng};
