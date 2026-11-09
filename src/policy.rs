@@ -262,7 +262,11 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         let mut pending = Vec::new();
         while pending.len() < limit {
             next = next_counter(next)?;
-            match self.rules.load(&community, Selection::Revision(next)).await? {
+            match self
+                .rules
+                .load(&community, Selection::Revision(next))
+                .await?
+            {
                 Some(revision) => pending.push(revision),
                 None => break,
             }
