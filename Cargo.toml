@@ -30,7 +30,8 @@ thiserror = "2"
 [dev-dependencies]
 ohttp = { version = "0.8", default-features = false, features = ["rust-hpke"] }
 sha2 = "0.10"
-webauthn-authenticator-rs = { version = "0.5.5", default-features = false, features = ["softtoken"] }
+webauthn-rs-proto = "0.5.5"
+cpky = { git = "https://git.corbet.ch/corbet-libre/cpky.git", branch = "main", features = ["test-authenticator"] }
 libsql = { version = "0.9", default-features = false, features = ["core"] }
 clbs = { git = "https://git.corbet.ch/corbet-libre/clbs.git", branch = "main" }
 rand = "0.8"

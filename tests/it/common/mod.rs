@@ -3,6 +3,9 @@
 use cplc::{crbk, crlt, csgn, cshm, *};
 use serde_json::json;
 
+pub mod softtoken;
+pub use softtoken::SoftwareToken;
+
 pub const COMMUNITY: &str = "example";
 pub const NOW: u64 = 100;
 pub const MEMBER: &str = "community-pseudonym";

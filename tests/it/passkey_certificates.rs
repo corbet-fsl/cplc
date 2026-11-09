@@ -2,7 +2,6 @@
 use crate::common;
 use common::*;
 use cplc::*;
-use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};
 
 async fn registered() -> (
     tempfile::TempDir,
@@ -34,7 +33,7 @@ async fn registered() -> (
             .as_mut()
             .unwrap()
             .require_resident_key = false;
-        let response = SoftToken::new(true)
+        let response = SoftwareToken::new(true)
             .unwrap()
             .0
             .perform_register(
