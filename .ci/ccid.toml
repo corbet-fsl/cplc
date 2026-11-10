@@ -241,12 +241,3 @@ line = 158
 context = ["                if issuer.to_bytes() != *bytes {", "                    return Err(Error::Corrupt);", "                }"]
 reason = "Only reachable through the canonical-bytes guard at line 157; see its reason."
 targets = ["native"]
-
-[[coverage.exclusions]]
-file = "src/storage/sql.rs"
-line = 175
-context = ["        != after.get_i64(0).map_err(|_| Error::Corrupt)?", "        || before.get_str(1).map_err(|_| Error::Corrupt)?", "            != after.get_str(1).map_err(|_| Error::Corrupt)?"]
-reason = "Needs the document row rewritten without a revision change between the two header reads of one read transaction. Every writer of this table increments the revision with the document; only out-of-band corruption mid-read can do otherwise, which cannot be staged deterministically. The revision comparison on the line above is covered."
-targets = ["native"]
-branch = { block = 0, id = 0 }
-evidence_sources = { "src/storage/sql.rs" = "45ad29c9928a8275eae9089c6e8b05d06d30e192ff87b3553503695229f24ee6" }

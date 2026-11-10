@@ -94,3 +94,22 @@ async fn original_cas_between_real_pages_invalidates_the_retained_header() {
     assert!(matches!(same_header(&before, &after), Err(Error::Conflict)));
     assert_eq!(store.load().await.unwrap().as_ref(), Some(&second));
 }
+
+#[tokio::test]
+async fn header_fence_conflicts_on_a_changed_document_at_an_equal_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(crlt::Config::new(
+        format!("file://{}", dir.path().join("rows.db").display()),
+        "",
+    ))
+    .await
+    .unwrap();
+    let scope = db.community("rows").unwrap();
+    let a = scope.query("SELECT 1, 'a'", ()).await.unwrap();
+    let a2 = scope.query("SELECT 1, 'a'", ()).await.unwrap();
+    let b = scope.query("SELECT 1, 'b'", ()).await.unwrap();
+    let other = scope.query("SELECT 2, 'a'", ()).await.unwrap();
+    assert!(same_header(&a, &a2).is_ok());
+    assert!(matches!(same_header(&a, &b), Err(Error::Conflict)));
+    assert!(matches!(same_header(&a, &other), Err(Error::Conflict)));
+}
