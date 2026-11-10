@@ -11,7 +11,7 @@ publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
 
 [dependencies]
-cvch = { git = "https://git.corbet.ch/corbet-foss/cvch.git", branch = "main" }
+cvch = { git = "https://git.corbet.ch/corbet-libre/cvch.git", branch = "main" }
 cblc = { git = "https://git.corbet.ch/corbet-fsl/cblc.git", branch = "main", features = ["publication"] }
 ckyh = { git = "https://git.corbet.ch/corbet-libre/ckyh.git", branch = "main" }
 cbcn = { git = "https://git.corbet.ch/corbet-libre/cbcn.git", branch = "main" }
@@ -41,4 +41,3 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
-
