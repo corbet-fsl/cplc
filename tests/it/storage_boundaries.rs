@@ -185,7 +185,7 @@ async fn actual_sql_decoder_rejects_bad_scope_revision_and_revocation_rows() {
                         crlt::params![
                             "x".repeat(
                                 MAX_DOCUMENT_BYTES
-                                    + 5 * 4 * (MAX_DOCUMENT_BYTES + 8192)
+                                    + 7 * 4 * (MAX_DOCUMENT_BYTES + 8192)
                                     + 4 * cbcn::MAX_KEY_TRANSITION_BYTES
                                     + 1
                             ),

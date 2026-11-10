@@ -202,3 +202,53 @@ async fn original_passkey_revocation_survives_sql_reload_mutation_and_reopen() {
     .unwrap();
     assert!(revoked.content.passkeys.contains(&credential));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn passkey_certificate_refuses_revoked_member_foreign_scope_and_regressed_clock() {
+    let (_directory, registered) = registered().await;
+    let mut policy = memory().await;
+    // A foreign scope: the same registration offered to another community's signer.
+    let signer = csgn::PersistentSigner::create(
+        csgn::MemoryStore::default(),
+        "other-community",
+        key(1),
+        day(NOW),
+        ESTABLISHED_MEMBER_VALIDITY,
+    )
+    .await
+    .unwrap();
+    let mut foreign = Policy::create(
+        crbk::MemoryStore::default(),
+        MemoryStore::new("other-community").unwrap(),
+        signer,
+        config(),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        foreign.issue_passkey_certificate(&registered, NOW).await,
+        Err(Error::Invalid("passkey certificate scope"))
+    ));
+    // A revoked member refuses renewal although its credential is not listed.
+    policy
+        .set_revocations(Revocations {
+            members: [MEMBER.to_string()].into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        policy.issue_passkey_certificate(&registered, NOW).await,
+        Err(Error::Revoked)
+    ));
+    // The signer's clock never moves backwards: an earlier trusted time signs nothing.
+    let mut policy = memory().await;
+    policy
+        .issue_passkey_certificate(&registered, NOW + 2 * DAY)
+        .await
+        .unwrap();
+    assert!(matches!(
+        policy.issue_passkey_certificate(&registered, NOW).await,
+        Err(Error::Invalid("passkey certificate signing"))
+    ));
+}

@@ -111,6 +111,25 @@ async fn signed_balance_floor_survives_rejected_current_state_transitions() {
         .compare_exchange(Some(initial.revision), &committed)
         .await
         .unwrap();
+    // A later signed floor (revision 2) can never be replaced by an earlier one.
+    let mut advanced = committed.clone();
+    advanced.revision += 1;
+    advanced.balance.as_mut().unwrap().revision = 2;
+    store
+        .compare_exchange(Some(committed.revision), &advanced)
+        .await
+        .unwrap();
+    let mut regressed = advanced.clone();
+    regressed.revision += 1;
+    regressed.balance.as_mut().unwrap().revision = 1;
+    assert!(
+        store
+            .compare_exchange(Some(advanced.revision), &regressed)
+            .await
+            .is_err()
+    );
+    assert_eq!(store.load().await.unwrap(), Some(advanced.clone()));
+    committed = advanced;
     for case in 0..5 {
         let mut next = committed.clone();
         next.revision += 1;

@@ -14,7 +14,7 @@ Rust (`#![forbid(unsafe_code)]`, `src/lib.rs:4`).
   `cblc/src/accounting_ledger/extensions.rs:140`, red-at-HEAD, outside this repo;
   cplc's own code is warning-free)
 - No wasm target: `check -p cplc --target wasm32-unknown-unknown` fails inside
-  `mio` (unsupported); CI (`.ci/verify.sh`) does not run it either.
+  `mio` (unsupported); CI (`.ci/ccid.toml` verify) does not run it either.
 - CI-only (Crow): `provider-controls.py` / `test-provider-controls.py`,
   nightly `llvm-cov` strict gate (`docs/COVERAGE.md`)
 

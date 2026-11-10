@@ -3,7 +3,7 @@
 CI uses cargo-llvm-cov on nightly for upstream Rust branch instrumentation.
 Stable Rust remains the compiler for formatting, Clippy, native and wasm checks.
 The gate requires exactly 100% of emitted production source lines and branches,
-with a complete matching LLVM JSON file inventory and no absent measurements. Four line-only defensive error mappings are documented in `coverage-exclusions.json`. Test harness and fixture files are excluded because
+with a complete matching LLVM JSON file inventory and no absent measurements. Defensive error mappings are documented as `[[coverage.exclusions]]` in `.ci/ccid.toml`. Test harness and fixture files are excluded because
 they are validation inputs rather than shipped behavior. A failed gate is an
 open test gap, never evidence of complete coverage.
 

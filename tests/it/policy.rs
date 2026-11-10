@@ -1109,3 +1109,32 @@ fn ohttp_config(id: u8) -> Vec<u8> {
     .encode()
     .unwrap()
 }
+
+#[tokio::test]
+async fn rulebook_and_upcoming_revisions_are_read_only_views_at_a_trusted_time() {
+    let mut policy = memory().await;
+    let current = policy.rulebook(NOW).await.unwrap();
+    assert!(policy.upcoming(NOW, 5).await.unwrap().is_empty());
+    let mut later = book(admission());
+    later.set_community("quota", Some(json!(7))).unwrap();
+    policy
+        .schedule_rules(Some(1), change(later.clone(), 2, (NOW + 10) as i64))
+        .await
+        .unwrap();
+    policy
+        .schedule_rules(Some(2), change(later.clone(), 3, (NOW + 20) as i64))
+        .await
+        .unwrap();
+    assert_eq!(policy.rulebook(NOW).await.unwrap(), current);
+    let both = policy.upcoming(NOW, 5).await.unwrap();
+    assert_eq!(
+        both.iter().map(|r| r.revision).collect::<Vec<_>>(),
+        vec![2, 3]
+    );
+    assert_eq!(policy.upcoming(NOW, 1).await.unwrap().len(), 1);
+    assert!(policy.upcoming(NOW, 0).await.unwrap().is_empty());
+    assert_ne!(policy.rulebook(NOW + 10).await.unwrap(), current);
+    let rest = policy.upcoming(NOW + 10, 5).await.unwrap();
+    assert_eq!(rest.len(), 1);
+    assert_eq!(rest[0].revision, 3);
+}
