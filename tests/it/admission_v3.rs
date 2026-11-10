@@ -6,12 +6,47 @@ use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
 use sha2::{Digest, Sha256};
 
 async fn configured() -> MemoryPolicy {
-    let mut policy = memory_with(book(crbk::ActionPolicy::default())).await;
+    configured_with(|_| ()).await
+}
+async fn configured_with(edit: impl FnOnce(&mut PublicVerifierMaterial)) -> MemoryPolicy {
+    let policy = memory_with(book(crbk::ActionPolicy::default())).await;
+    publish_material(policy, edit).await
+}
+/// A policy whose first rulebook is already in force from the start of time.
+async fn from_epoch_start(edit: impl FnOnce(&mut PublicVerifierMaterial)) -> MemoryPolicy {
+    let signer = csgn::PersistentSigner::create(
+        csgn::MemoryStore::default(),
+        COMMUNITY,
+        key(1),
+        day(NOW),
+        ESTABLISHED_MEMBER_VALIDITY,
+    )
+    .await
+    .unwrap();
+    let mut policy = Policy::create(
+        crbk::MemoryStore::default(),
+        MemoryStore::new(COMMUNITY).unwrap(),
+        signer,
+        config(),
+    )
+    .await
+    .unwrap();
+    let mut first = change(book(crbk::ActionPolicy::default()), 1, 0);
+    first.announced_at = 0;
+    policy.schedule_rules(None, first).await.unwrap();
+    policy.set_schema(schema(1)).await.unwrap();
+    publish_material(policy, edit).await
+}
+async fn publish_material(
+    mut policy: MemoryPolicy,
+    edit: impl FnOnce(&mut PublicVerifierMaterial),
+) -> MemoryPolicy {
     let fixture: serde_json::Value =
         serde_json::from_slice(include_bytes!("../fixtures/balance-material-v2.json")).unwrap();
     let mut material: PublicVerifierMaterial =
         serde_json::from_value(fixture["material"].clone()).unwrap();
     material.community = COMMUNITY.into();
+    edit(&mut material);
     material.policy_digest = material
         .policy
         .account
@@ -251,4 +286,62 @@ async fn period_projection_checks_actual_current_catalogue_without_defaults() {
             .await
             .is_err()
     );
+}
+
+fn member_source(member: String, lease_end: u64) -> FixtureMembership {
+    FixtureMembership {
+        member,
+        state: crbk::MembershipState::Admitted,
+        probation_until: None,
+        lease_end,
+        authorized_devices: DEVICES.to_vec(),
+    }
+}
+
+#[tokio::test]
+async fn account_grant_refuses_a_malformed_pseudonym_or_an_unlisted_device() {
+    let mut policy = configured().await;
+    let short = member_source(HEXLOWER.encode(&[7; 47]), 90 * DAY);
+    assert!(matches!(
+        issue(&mut policy, &short, DEVICE).await,
+        Err(Error::Invalid("account pseudonym"))
+    ));
+    let odd = member_source("zz".into(), 90 * DAY);
+    assert!(matches!(
+        issue(&mut policy, &odd, DEVICE).await,
+        Err(Error::Invalid("account pseudonym"))
+    ));
+    let source = member_source(HEXLOWER.encode(&[7; 48]), 90 * DAY);
+    assert!(matches!(
+        issue(&mut policy, &source, [1; 32]).await,
+        Err(Error::Invalid("unauthorized account device"))
+    ));
+}
+
+#[tokio::test]
+async fn account_grant_refuses_a_lease_that_has_already_ended() {
+    let mut policy = configured().await;
+    let ended = member_source(HEXLOWER.encode(&[7; 48]), NOW);
+    let result = issue(&mut policy, &ended, DEVICE).await;
+    assert!(
+        matches!(result, Err(Error::Invalid("membership state or lease"))),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
+async fn balance_publication_is_withheld_outside_the_published_account_window() {
+    // Before the window opens the signed publication is withheld although its
+    // signature is already valid.
+    let early = from_epoch_start(|material| {
+        material.policy.account.policy_valid_from = NOW;
+    })
+    .await;
+    assert!(early.balance_publication(NOW).await.unwrap().is_some());
+    let before = early.balance_publication(NOW - 1).await;
+    assert!(matches!(before, Err(Error::Verification)), "{before:?}");
+    let policy = configured().await;
+    assert!(policy.balance_publication(1999).await.unwrap().is_some());
+    let late = policy.balance_publication(2500).await;
+    assert!(matches!(late, Err(Error::Verification)), "{late:?}");
 }

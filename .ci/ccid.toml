@@ -3,9 +3,53 @@ project = "cplc"
 
 [checks.verify]
 kind = "commands"
-commands = [["bash", ".ci/verify.sh"]]
+fleet = true
+commands = [
+  ["bash", "-c", "cargo metadata --locked --format-version 1 > dependency-metadata.json"],
+  ["python3", ".ci/test-provider-controls.py"],
+  ["cargo", "fmt", "--all", "--check"],
+  ["ccid", "first-party"],
+  ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
+  ["python3", ".ci/provider-controls.py"],
+  ["cargo", "test", "--locked", "--no-fail-fast"],
+  ["ccid", "coverage", "run"],
+]
 cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["python3", "--version"]]
 cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-metadata.json"]
+
+[coverage]
+llvm_cov = ["--branch", "--ignore-filename-regex", "(^|/)(tests|scripts)/"]
+report = ["--branch", "--ignore-filename-regex", "(^|/)(tests|scripts)/"]
+text = ["--show-instantiations"]
+artifacts = true
+
+[[coverage.exclusions]]
+file = "src/policy.rs"
+line = 305
+context = ["        cgts::gates::define_settings(&mut change.rulebook)", '            .map_err(|_| Error::Invalid("gate settings"))?;', "        change.rulebook.validate()?;"]
+reason = "The maintained cgts catalogue installer skips an existing voucher setting and otherwise defines one fixed valid key, integer default and bounds. Its crbk validation cannot fail for these constants. Retain the defensive upstream error mapping; reassess when that owner changes the catalogue contract."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy.rs"
+line = 670
+context = ["                next.schema.clone().ok_or(Error::Missing)?,", "            )?,", "            SnapshotKind::SchemaVersions => {"]
+reason = "The schema snapshot was already encoded and size-checked by set_schema using maximal u64 counters before durable replacement. Publication uses smaller positive signed-64-bit counters and the identical concrete schema serializer, so this second encoding cannot fail. Missing schema and the reachable settings/history size refusals remain measured."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/storage.rs"
+line = 186
+context = ["        if serde_json::to_vec(&document)", "            .map_err(|_| Error::Corrupt)?", "            .len()"]
+reason = "StoredPolicy and its nested owned schema/configuration types use derived serialization with string or unit-enum JSON map keys and valid JSON numbers. No custom fallible serializer exists. This serde error mapping is defensive; encoded-size validation remains measured and allocation failure does not return a serde error."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/storage/sql.rs"
+line = 248
+context = ["                .unwrap_or_default(),", "        )?;", "        let new_entries = entries(&next.revocations)?;"]
+reason = "entries serializes only concrete 32-byte device arrays and constructs owned member strings. Those serde serializers cannot fail; this old-entry conversion propagates only that impossible error. Real malformed revocation decoding and SQL write/refusal paths remain measured."
+targets = ["native"]
 
 [checks.advisories]
 kind = "commands"
@@ -37,3 +81,172 @@ workflow = "resolve"
 command = ["bash", ".ci/run-cached.sh"]
 
 [check_shell]
+
+[[coverage.exclusions]]
+file = "src/policy/account.rs"
+line = 53
+context = ["            .verify(&original, csgn::Kind::SettingsSnapshot, now)", "            .map_err(|_| Error::Verification)?;", "        let material: cblc::publication::PublicVerifierMaterial ="]
+reason = "balance_publication, awaited one statement earlier on the same shared borrow with the same now, already verified these exact bytes against the same key ring as Kind::SettingsSnapshot, so this identical second verification cannot fail."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/account.rs"
+line = 60
+context = ["            .min(material.policy.account.policy_valid_until);", "        if now >= until {", "            return Err(Error::Verification);"]
+reason = "until is the minimum of values that are each already greater than now at this point: the membership lease and gate checks (credential_candidate refuses an ended lease and an unusable gate; validity_limit refuses an empty window), the passport bound checked on entry, the signature expiry verified at now by balance_publication, and the policy window validated at now by validate_at. now >= until cannot hold."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/account.rs" = "31ea039f3fe30477cd901034dbb8708d46c809abc2c443a182d72ff6f5086333" }
+
+[[coverage.exclusions]]
+file = "src/policy/account.rs"
+line = 61
+context = ["        if now >= until {", "            return Err(Error::Verification);", "        }"]
+reason = "Only reachable through the exclusion of the branch at line 60 above; see its reason."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/balance.rs"
+line = 72
+context = ["            .verify(cose, csgn::Kind::SettingsSnapshot, now)", "            .map_err(|_| Error::Verification)?;", "        let material: cblc::publication::PublicVerifierMaterial ="]
+reason = "Balance::verify on the line above verifies the same bytes with the same ring, Kind::SettingsSnapshot and now before this call, so the identical second verification cannot fail."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/certificate.rs"
+line = 35
+context = ["            .verify(&bytes, csgn::Kind::Credential, now)", "            .map_err(|_| Error::Invalid(\"passkey certificate lifetime\"))?;", "        Ok(bytes)"]
+reason = "The certificate was signed one statement earlier with issued = day(now) and a validity of the ring maximum, so it is valid at now (day(now) <= now < day(now) + max_validity); verification against the signing ring cannot fail."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 14
+context = ["        let decoded = cpsd::RootBoardIssuanceContext::from_bytes(&payload)", "            .map_err(|_| Error::Verification)?;", "        if decoded != *context || decoded.to_bytes() != payload {"]
+reason = "to_bytes of the typed context is canonical and from_bytes is its strict inverse over the same constructor; a context built through the public constructor always decodes."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 15
+context = ["            .map_err(|_| Error::Verification)?;", "        if decoded != *context || decoded.to_bytes() != payload {", "            return Err(Error::Verification);"]
+reason = "Canonical round trip identity of the typed context: from_bytes(to_bytes(c)) == c and re-encoding reproduces the bytes (strict decode, no trailing bytes, one writer), so neither operand can be true."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 15
+context = ["            .map_err(|_| Error::Verification)?;", "        if decoded != *context || decoded.to_bytes() != payload {", "            return Err(Error::Verification);"]
+reason = "As above: re-encoding the decoded context reproduces the payload bytes."
+targets = ["native"]
+branch = { block = 1, id = 2 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 16
+context = ["        if decoded != *context || decoded.to_bytes() != payload {", "            return Err(Error::Verification);", "        }"]
+reason = "Only reachable through the round-trip guard at line 15; see its reasons."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 37
+context = ["            cpsd::RootBoardRequest::from_bytes(&payload).map_err(|_| Error::Verification)?;", "        if decoded != *request || decoded.to_bytes() != payload {", "            return Err(Error::Verification);"]
+reason = "Canonical round trip identity of the typed request: from_bytes(to_bytes(r)) == r (strict decode, one writer), so the operand cannot be true."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 37
+context = ["            cpsd::RootBoardRequest::from_bytes(&payload).map_err(|_| Error::Verification)?;", "        if decoded != *request || decoded.to_bytes() != payload {", "            return Err(Error::Verification);"]
+reason = "As above: re-encoding the decoded request reproduces the payload bytes."
+targets = ["native"]
+branch = { block = 1, id = 2 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 38
+context = ["        if decoded != *request || decoded.to_bytes() != payload {", "            return Err(Error::Verification);", "        }"]
+reason = "Only reachable through the round-trip guard at line 37; see its reasons."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 71
+context = ["            .verify(&cose, csgn::Kind::SettingsSnapshot, now)", "            .map_err(|_| Error::Verification)?;", "        let payload: cbcn::root_board::Payload ="]
+reason = "root_board_publication(now), awaited a few statements earlier on the same shared borrow with the same now, already verified this exact COSE against the same ring as Kind::SettingsSnapshot (current_root_board), so this identical second verification cannot fail."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 100
+context = ["        let payload = serde_json::to_vec(&payload).map_err(|_| Error::Corrupt)?;", "        if payload.len() > MAX_DOCUMENT_BYTES {", "            return Err(Error::Invalid(\"root-board size\"));"]
+reason = "The payload is a fixed-shape JSON document whose only variable part is the canonical descriptor of one issuer with exactly one gate (validated by the descriptor constructor), a few hundred bytes encoded as a JSON number array, far below MAX_DOCUMENT_BYTES; the size limit cannot be exceeded."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 101
+context = ["        if payload.len() > MAX_DOCUMENT_BYTES {", "            return Err(Error::Invalid(\"root-board size\"));", "        }"]
+reason = "Only reachable through the size guard at line 100; see its reason."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 168
+context = ["            .map_err(|_| Error::Verification)?;", "        if validate_root_board(&descriptor, state, epoch, now)? != payload.descriptor", "            || state.root_board_cohort != Some(descriptor.cohort_start())"]
+reason = "validate_root_board returns descriptor.to_bytes() of a descriptor that from_bytes just decoded strictly from payload.descriptor; strict canonical decoding makes the re-encoding equal to the payload bytes, so the inequality cannot hold."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 187
+context = ["    let decoded = cpsd::RootBoardPublicKey::from_bytes(&bytes).map_err(|_| Error::Verification)?;", "    if decoded != *descriptor", "        || decoded.to_bytes() != bytes"]
+reason = "validate_root_board derives bytes from descriptor.to_bytes() and decodes them strictly; the decoded value equals the descriptor by canonical round trip, so the inequality cannot hold."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/policy/root_board.rs"
+line = 188
+context = ["    if decoded != *descriptor", "        || decoded.to_bytes() != bytes", "        || descriptor.community().as_bytes() != state.community.as_bytes()"]
+reason = "As above: the decoded descriptor re-encodes to the same canonical bytes."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/policy/root_board.rs" = "9f443c7d636d1887a336be87d309febcaa0354d72b07f6f88b8357f9b8721ac8" }
+
+[[coverage.exclusions]]
+file = "src/storage.rs"
+line = 157
+context = ["                    cpsd::IssuerPublicKey::from_bytes(bytes).map_err(|_| Error::Corrupt)?;", "                if issuer.to_bytes() != *bytes {", "                    return Err(Error::Corrupt);"]
+reason = "IssuerPublicKey::from_bytes is a strict canonical decoder (the stored bytes are rejected on line 156 when they carry trailing or malformed data), so a decoded key always re-encodes to the bytes it was decoded from."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/storage.rs" = "04ba8a61f51d21f1a7087d9a0c749a1f45865abcd204f81270e4b720f1872c6d" }
+
+[[coverage.exclusions]]
+file = "src/storage.rs"
+line = 158
+context = ["                if issuer.to_bytes() != *bytes {", "                    return Err(Error::Corrupt);", "                }"]
+reason = "Only reachable through the canonical-bytes guard at line 157; see its reason."
+targets = ["native"]
+
+[[coverage.exclusions]]
+file = "src/storage/sql.rs"
+line = 175
+context = ["        != after.get_i64(0).map_err(|_| Error::Corrupt)?", "        || before.get_str(1).map_err(|_| Error::Corrupt)?", "            != after.get_str(1).map_err(|_| Error::Corrupt)?"]
+reason = "Needs the document row rewritten without a revision change between the two header reads of one read transaction. Every writer of this table increments the revision with the document; only out-of-band corruption mid-read can do otherwise, which cannot be staged deterministically. The revision comparison on the line above is covered."
+targets = ["native"]
+branch = { block = 0, id = 0 }
+evidence_sources = { "src/storage/sql.rs" = "45ad29c9928a8275eae9089c6e8b05d06d30e192ff87b3553503695229f24ee6" }

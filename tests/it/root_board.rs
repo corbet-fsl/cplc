@@ -162,3 +162,216 @@ async fn durable_binding_and_cohort_cannot_be_removed_or_rewritten_after_invalid
 
 #[path = "root_board/signing.rs"]
 mod signing;
+
+#[tokio::test]
+async fn descriptor_reader_returns_the_authenticated_descriptor_until_its_exclusive_expiry() {
+    let (_directory, _db, _rules, mut policy) = setup().await;
+    assert!(policy.root_board_descriptor(NOW).await.unwrap().is_none());
+    let key = issuer(810);
+    let epoch = policy.epoch(NOW).await.unwrap();
+    let common = descriptor(&key, epoch, 0);
+    policy.publish_root_board(&common, NOW).await.unwrap();
+    let (read, until) = policy.root_board_descriptor(NOW).await.unwrap().unwrap();
+    assert!(read == common);
+    assert!(until > NOW && until <= common.expires_at());
+    // The signed publication, then the descriptor, lapse together at `until`.
+    assert!(matches!(
+        policy.root_board_descriptor(until).await,
+        Err(Error::Verification)
+    ));
+    assert!(matches!(
+        policy.root_board_publication(until).await,
+        Err(Error::Verification)
+    ));
+}
+
+#[tokio::test]
+async fn publication_never_lowers_the_recorded_cohort_floor() {
+    let (_directory, _db, _rules, mut policy) = setup().await;
+    let key = issuer(811);
+    let epoch = policy.epoch(NOW).await.unwrap();
+    let later = descriptor(&key, epoch, ROOT_BOARD_COHORT_SECONDS);
+    policy
+        .publish_root_board(&later, ROOT_BOARD_COHORT_SECONDS)
+        .await
+        .unwrap();
+    let before = policy
+        .root_board_publication(ROOT_BOARD_COHORT_SECONDS)
+        .await
+        .unwrap();
+    let earlier = descriptor(&key, epoch, 0);
+    // At an earlier trusted time the lower cohort is still current, yet below the floor.
+    assert!(matches!(
+        policy.publish_root_board(&earlier, NOW).await,
+        Err(Error::Verification)
+    ));
+    assert_eq!(
+        policy
+            .root_board_publication(ROOT_BOARD_COHORT_SECONDS)
+            .await
+            .unwrap(),
+        before
+    );
+}
+
+#[tokio::test]
+async fn stored_root_board_revision_never_regresses_or_changes_its_signature_in_place() {
+    let (_directory, db, _rules, mut policy) = setup().await;
+    let key = issuer(812);
+    let epoch = policy.epoch(NOW).await.unwrap();
+    let common = descriptor(&key, epoch, 0);
+    policy.publish_root_board(&common, NOW).await.unwrap();
+    policy.publish_root_board(&common, NOW).await.unwrap();
+    let store = LibsqlStore::new(&db, ROOT).unwrap();
+    let stored = store.load().await.unwrap().unwrap();
+    let baseline = serde_json::to_value(&stored).unwrap();
+    assert_eq!(baseline["root_board"]["revision"], 2);
+    for case in 0..2 {
+        let mut value = baseline.clone();
+        value["revision"] = json!(stored.revision() + 1);
+        match case {
+            0 => value["root_board"]["revision"] = json!(1),
+            _ => value["root_board"]["cose"][0] = json!(0xff),
+        }
+        let next: StoredPolicy = serde_json::from_value(value).unwrap();
+        assert!(
+            matches!(
+                store.compare_exchange(Some(stored.revision()), &next).await,
+                Err(Error::Corrupt)
+            ),
+            "case {case}"
+        );
+        assert_eq!(store.load().await.unwrap().unwrap(), stored);
+    }
+}
+
+#[tokio::test]
+async fn stored_root_binding_must_be_canonical_and_fit_the_descriptor_community() {
+    let (_directory, db, _rules, mut policy) = setup().await;
+    let key = issuer(813);
+    let epoch = policy.epoch(NOW).await.unwrap();
+    policy
+        .publish_root_board(&descriptor(&key, epoch, 0), NOW)
+        .await
+        .unwrap();
+    let baseline = serde_json::to_value(
+        LibsqlStore::new(&db, ROOT)
+            .unwrap()
+            .load()
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    let long = "c".repeat(256);
+    for case in 0..3 {
+        let mut value = baseline.clone();
+        value["revision"] = json!(1);
+        let mut scope = ROOT.to_string();
+        match case {
+            0 => {}
+            1 => value["root_board_issuer"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!(0)),
+            _ => {
+                scope = long.clone();
+                value["community"] = json!(long);
+                value["schema"]["community"] = json!(long);
+                for version in value["schema_versions"].as_array_mut().unwrap() {
+                    version["schema"]["community"] = json!(long);
+                }
+            }
+        }
+        let next: StoredPolicy = serde_json::from_value(value).unwrap();
+        let fresh = MemoryStore::new(scope).unwrap();
+        let result = fresh.compare_exchange(None, &next).await;
+        if case == 0 {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(Error::Corrupt)), "case {case}");
+            assert!(fresh.load().await.unwrap().is_none());
+        }
+    }
+}
+
+/// Replace the stored root-board publication with a genuinely signed (by the
+/// community's own key) revision 2 that carries `descriptor` as its payload.
+async fn forged_publication(
+    db: &crlt::Db,
+    descriptor: Vec<u8>,
+    epoch: u64,
+    signed_at: u64,
+    until: u64,
+) {
+    let mut signer = csgn::PersistentSigner::open(
+        csgn::LibsqlStore::new(db.community(ROOT).unwrap()),
+        ROOT,
+        key(1),
+        day(signed_at),
+    )
+    .await
+    .unwrap();
+    let payload = cbcn::root_board::Payload {
+        purpose: cbcn::root_board::PURPOSE.into(),
+        community: ROOT.into(),
+        revision: 2,
+        policy_epoch: epoch,
+        descriptor,
+    };
+    let cose = signer
+        .sign(
+            csgn::Kind::SettingsSnapshot,
+            &serde_json::to_vec(&payload).unwrap(),
+            day(signed_at),
+            until,
+        )
+        .await
+        .unwrap();
+    let store = LibsqlStore::new(db, ROOT).unwrap();
+    let stored = store.load().await.unwrap().unwrap();
+    let mut value = serde_json::to_value(&stored).unwrap();
+    value["revision"] = json!(stored.revision() + 1);
+    value["root_board"] = json!({"revision": 2, "cose": cose});
+    let next: StoredPolicy = serde_json::from_value(value).unwrap();
+    store
+        .compare_exchange(Some(stored.revision()), &next)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn signed_but_inconsistent_root_publications_are_never_read_as_a_descriptor() {
+    for case in 0..3 {
+        let (_directory, db, rules, mut policy) = setup().await;
+        let key = issuer(814);
+        let epoch = policy.epoch(NOW).await.unwrap();
+        let bound = descriptor(&key, epoch, 0);
+        policy.publish_root_board(&bound, NOW).await.unwrap();
+        let (bytes, signed_at, until) = match case {
+            // Not a descriptor at all.
+            0 => (vec![1, 2, 3], NOW, NOW + 1000),
+            // A well-formed descriptor of a later cohort than the recorded one.
+            1 => (
+                descriptor(&key, epoch, ROOT_BOARD_COHORT_SECONDS).to_bytes(),
+                ROOT_BOARD_COHORT_SECONDS,
+                ROOT_BOARD_COHORT_SECONDS + 1000,
+            ),
+            // The recorded descriptor, signed for longer than it is valid.
+            _ => (bound.to_bytes(), 10 * DAY, bound.expires_at() + 1),
+        };
+        forged_publication(&db, bytes, epoch, signed_at, until).await;
+        let reopened = reopen(&db, rules, 1, signed_at).await;
+        assert!(
+            matches!(
+                reopened.root_board_publication(signed_at).await,
+                Err(Error::Verification)
+            ),
+            "case {case}"
+        );
+        assert!(matches!(
+            reopened.root_board_descriptor(signed_at).await,
+            Err(Error::Verification)
+        ));
+    }
+}

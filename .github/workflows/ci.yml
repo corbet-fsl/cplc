@@ -48,13 +48,7 @@ jobs:
             dependency-metadata.json
       - name: Prepare formatting correction without executing project code
         run: |
-          cargo fmt --all
-          git diff -- '*.rs' > rustfmt.patch
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: rustfmt-patch
-          path: rustfmt.patch
-      - run: test ! -s rustfmt.patch
+          cargo fmt --all --check
       - run: python3 .github/check-first-party.py
       - run: python3 .github/test-check-source-coverage.py
   check:

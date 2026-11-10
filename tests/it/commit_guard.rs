@@ -163,3 +163,27 @@ async fn cancelled_current_owner_read_rolls_back_staged_schema_and_invalidates_c
     );
     assert!(matches!(policy.schema(), Err(Error::ReloadRequired)));
 }
+
+#[tokio::test]
+async fn permitted_checked_schema_commits_and_keeps_the_writer_usable() {
+    let (_dir, db, _rules_db, mut policy) = local().await;
+    let mut guard = cut(false, 0);
+    assert!(
+        policy
+            .set_schema_checked(schema(2), &mut guard)
+            .await
+            .is_ok()
+    );
+    assert_eq!((guard.checks, guard.releases), (1, 2));
+    let actual = LibsqlStore::new(&db, COMMUNITY)
+        .unwrap()
+        .load()
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(actual).unwrap()["schema"]["version"],
+        2
+    );
+    assert_eq!(policy.schema().unwrap().unwrap().version, 2);
+}
