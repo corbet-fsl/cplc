@@ -13,7 +13,7 @@ CONTROLS = ((b'!gate_ids.insert((gate.level, &gate.gate, &gate.provider))', b'!g
 
 def run():
     result = subprocess.run(
-        ["cargo", "test", "--locked", "--test", TARGET, TEST,
+        ["cargo", "test", "--locked", "--test", "it", TARGET + "::" + TEST,
          "--", "--exact", "--nocapture"], capture_output=True, text=True,
         timeout=900,
         env={**os.environ, "CARGO_TERM_COLOR": "never", "RUST_BACKTRACE": "0"},
@@ -22,7 +22,7 @@ def run():
 
 
 def exact_result(output, result):
-    return re.search(r"^test " + re.escape(TEST) + r" \.\.\. " + result + r"$",
+    return re.search(r"^test " + re.escape(TARGET) + "::" + re.escape(TEST) + r" \.\.\. " + result + r"$",
                      output, re.M) is not None
 
 
@@ -35,8 +35,8 @@ def assertion(status, output, marker):
     # Build failures, unrelated assertions and zero selected tests cannot qualify.
     return (status == 101 and exact_result(output, "FAILED")
             and "test result: FAILED. 0 passed; 1 failed; 0 ignored;" in output
-            and re.search(r"thread '" + re.escape(TEST)
-                          + r"'(?: \([0-9]+\))? panicked at tests/"
+            and re.search(r"thread '" + re.escape(TARGET) + "::" + re.escape(TEST)
+                          + r"'(?: \([0-9]+\))? panicked at tests/it/"
                           + re.escape(TARGET) + r"\.rs:[0-9]+:[0-9]+:", output)
             and marker in output and "error[E" not in output
             and "could not compile" not in output)

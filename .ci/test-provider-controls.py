@@ -15,8 +15,8 @@ spec.loader.exec_module(controls)
 
 def output(result="FAILED", marker="exact assertion", pid=" (1234)"):
     summary = "FAILED. 0 passed; 1 failed" if result == "FAILED" else "ok. 1 passed; 0 failed"
-    return (f"thread '{controls.TEST}'{pid} panicked at tests/{controls.TARGET}.rs:42:5:\n"
-            f"{marker}\ntest {controls.TEST} ... {result}\n"
+    return (f"thread '{controls.TARGET}::{controls.TEST}'{pid} panicked at tests/it/{controls.TARGET}.rs:42:5:\n"
+            f"{marker}\ntest {controls.TARGET}::{controls.TEST} ... {result}\n"
             f"test result: {summary}; 0 ignored; 0 measured; 0 filtered out\n")
 
 
