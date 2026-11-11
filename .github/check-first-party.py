@@ -8,13 +8,14 @@ import tomllib
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-FIRST_PARTY = re.compile(r"^(?:git\+)?https://(?:github\.com/(?:corbet-(?:foss|libs)|cmtymeet)|git\.corbet\.ch/(?:corbet-(?:foss|libs|libre|fsl)|cmty(?:meet|mt)))/")
+FIRST_PARTY = re.compile(r"^(?:git\+)?https://(?:github\.com|git\.corbet\.ch)/(?:corbet-(?:libre|fsl)|cmtymeet)/")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 # These are the original transitive issuer owners, not alternative selectors
 # for product declarations. The maintained CBLC issuer still consumes them.
-# The v01 original-issuer exceptions ended with the 2026-11 org move (every pin
-# is branch = main at its new owner); the map stays as the extension point.
-ORIGINAL_ISSUERS = {}
+ORIGINAL_ISSUERS = {
+    'cmbl': ('0.1.0', 'https://git.corbet.ch/corbet-libre/cmbl.git'),
+    'cmmr': ('0.1.0', 'https://git.corbet.ch/corbet-libre/cmmr.git'),
+}
 
 
 def check_lock(packages):
@@ -90,8 +91,8 @@ def rejects(function, value):
     raise AssertionError(f'Invalid input accepted: {value!r}')
 
 
-def check_host_fixtures(host, organization):
-    repo = f'https://{host}/{organization}/example'
+def check_host_fixtures(host):
+    repo = f'https://{host}/corbet-libre/example'
     source = 'git+' + repo + '?branch=main#' + 'a' * 40
     package = {'name': 'example', 'source': source}
     check_lock([package])
@@ -114,8 +115,8 @@ def check_host_fixtures(host, organization):
 
 
 def self_test():
-    for host, organization in [('github.com', 'corbet-foss'), ('git.corbet.ch', 'corbet-libre')]:
-        check_host_fixtures(host, organization)
+    for host in ['github.com', 'git.corbet.ch']:
+        check_host_fixtures(host)
     check_original_issuer_fixtures()
 
 
@@ -134,7 +135,7 @@ def check_original_issuer_fixtures():
             {'name': name},
             dict(package, source=f'registry+https://example.test/index#{sha}'),
             dict(package, source=source.replace('git.corbet.ch', 'github.com')),
-            dict(package, source=source.replace('corbet-foss', 'corbet-libs')),
+            dict(package, source=source.replace('corbet-libre', 'corbet-fsl')),
             dict(package, source=source.replace('git.corbet.ch', 'git.corbet.ch.evil.test')),
             dict(package, source=source.replace('git.corbet.ch', 'user@git.corbet.ch')),
             dict(package, source=source.replace('git.corbet.ch', 'git.corbet.ch:443')),
