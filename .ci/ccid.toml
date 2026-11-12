@@ -60,7 +60,7 @@ render_schema = 2
 
 [jobs.verify]
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["verify", "advisories"]
 workflow = "ci"
 command = ["bash", ".ci/run-cached.sh"]
@@ -74,7 +74,7 @@ cache_outputs = ["Cargo.lock", "dependency-metadata.json"]
 
 [jobs.resolve-dependencies]
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 events = ["manual"]
 checks = ["resolve-dependencies"]
 workflow = "resolve"
