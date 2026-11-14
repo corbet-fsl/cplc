@@ -241,3 +241,6 @@ line = 158
 context = ["                if issuer.to_bytes() != *bytes {", "                    return Err(Error::Corrupt);", "                }"]
 reason = "Only reachable through the canonical-bytes guard at line 157; see its reason."
 targets = ["native"]
+
+[security]
+dependencies = "cargo-deny"
