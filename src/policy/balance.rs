@@ -9,6 +9,7 @@ impl<R: crbk::Storage, S: Storage, K: csgn::Store> Policy<R, S, K> {
         Ok(cbcn::document::Version {
             revision: next_counter(state.balance.as_ref().map_or(0, |p| p.revision))?,
             epoch: self.epoch(now).await?,
+            fresh: 0,
         })
     }
 
