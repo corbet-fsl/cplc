@@ -4,6 +4,18 @@
   "tool_revision": "",
   "manifest_sha256": "09bed0caad635d40117e0bbfa84a5a8b487b7f904f44b4854e118dc28a095f9c",
   "jobs": {
+    "portable-paths": {
+      "job": "portable-paths",
+      "scheduler": "forgejo",
+      "checks": [
+        "portable-paths"
+      ],
+      "workflow": "portable-paths",
+      "command": [
+        "ccid:run-declared-checks"
+      ],
+      "runs_on": "linux"
+    },
     "resolve-dependencies": {
       "job": "resolve-dependencies",
       "scheduler": "forgejo",
